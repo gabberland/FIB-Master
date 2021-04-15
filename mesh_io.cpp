@@ -49,7 +49,6 @@ void ReadTxtVertices(std::ifstream *fin, Mesh *mesh)
     {
         array.push_back(t);
     }
-    std::cout << std::endl;
 
     float vx, vy, nx, ny;
 

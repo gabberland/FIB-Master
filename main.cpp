@@ -15,18 +15,19 @@ std::shared_ptr<data_representation::Mesh> mesh_;
 static const int 	PIXEL_MARGINS = 1;
 static const string GRADIENT = "gradient";
 static const string SMOOTHNESS = "2D";
-int					FIELD_RESOLUTION = 64;
-float 				NORMAL_SIZE = .2;
-string				RELATIVE_OUT_PATH_NAME = "out.png";
-string 				RELATIVE_IN_PATH_NAME;
-bool				MODEL_GENERATION_MODE = 0;
-bool 				MODEL_GENERATED = 0;
-Normal				NORMAL_ALGORITHM = Normal::sampling;
-Smoothness			SMOOTHNESS_ALGORTITHM = Smoothness::singleDimension;
+
+int					Field_Resolution_ = 64;
+float 				Normal_Size_ = .2;
+string				Relative_Out_Path_Name_ = "out.png";
+string 				Relative_In_Path_Name_;
+bool				Model_Generation_Mode_ = 0;
+bool 				Model_Generated_ = 0;
+Normal				Normal_Algorithm = Normal::sampling;
+Smoothness			Smoothness_Algorithm_ = Smoothness::singleDimension;
 
 void printUsage()
 {
-	std::cout << "Usage: reconstruction.exe [ -f | -g ] [ relative path | model generation mode ] [ -n | -r | -a | -s ] [ normal size | resolution | normal algorithm | smoothing algorithm ]" << std::endl;
+	std::cout << "Usage: reconstruction.exe [ -f | -g ] [ relative path | model generation mode ] optional: [ -n | -r | -a | -s ] [ normal size | resolution | normal algorithm (gradient or sampling) | smoothing algorithm (1D or 2D)]" << std::endl;
 }
 void readFlagArguments(const int &argc, char **argv)
 {
@@ -44,7 +45,7 @@ void readFlagArguments(const int &argc, char **argv)
 		switch (c)
 		{
 			case 'g':
-				MODEL_GENERATION_MODE = 1;
+				Model_Generation_Mode_ = 1;
 				break;
 						
 			case 'h':
@@ -52,24 +53,24 @@ void readFlagArguments(const int &argc, char **argv)
 				break;
 			
 			case 'f':
-				RELATIVE_IN_PATH_NAME = optarg;
+				Relative_In_Path_Name_ = optarg;
 				break;
 			
 			case 'n':
-				NORMAL_SIZE = stof(optarg);
+				Normal_Size_ = stof(optarg);
 				break;
 			case 'r':
-				FIELD_RESOLUTION = stoi(optarg);
+				Field_Resolution_ = stoi(optarg);
 				break;
 
 			case 'a':
 				if (GRADIENT == optarg)
-					NORMAL_ALGORITHM = Normal::gradient;
+					Normal_Algorithm = Normal::gradient;
 				break;
 
 			case 's':
 				if (SMOOTHNESS == optarg)
-					SMOOTHNESS_ALGORTITHM = Smoothness::twoDimension;
+					Smoothness_Algorithm_ = Smoothness::twoDimension;
 				break;
 
 			case '?':
@@ -121,7 +122,7 @@ void display() {
 	{
 			glVertex2f(mesh_->vertices_[i][0], mesh_->vertices_[i][1]);
 
-			glVertex2f(mesh_->vertices_[i][0] + (NORMAL_SIZE *mesh_->normals_[i][0]), mesh_->vertices_[i][1] + (NORMAL_SIZE * mesh_->normals_[i][1]));
+			glVertex2f(mesh_->vertices_[i][0] + (Normal_Size_ *mesh_->normals_[i][0]), mesh_->vertices_[i][1] + (Normal_Size_ * mesh_->normals_[i][1]));
 	}
 	glEnd();
 
@@ -159,12 +160,12 @@ int main(int argc, char** argv) {
 	readFlagArguments(argc, argv);
 
 	// Read file file | create random datapoints
-	if(MODEL_GENERATION_MODE && !RELATIVE_IN_PATH_NAME.empty())
+	if(Model_Generation_Mode_ && !Relative_In_Path_Name_.empty())
 	{
 		std::cout << "[ERROR] Please use -f | -g one by one" << std::endl;
 	}
 
-	if(!RELATIVE_IN_PATH_NAME.empty())
+	if(!Relative_In_Path_Name_.empty())
 	{
 		std::string file = (std::string)argv[2];
 		size_t pos = file.find_last_of(".");
@@ -176,7 +177,7 @@ int main(int argc, char** argv) {
 		if (type.compare("txt") == 0) 
 		{
 			res = data_representation::ReadFromTXT(file, mesh_.get());
-			MODEL_GENERATED = true;
+			Model_Generated_ = true;
 		}
 
 		else if (type.compare("svg") == 0)
@@ -192,33 +193,33 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	else if(MODEL_GENERATION_MODE)
+	else if(Model_Generation_Mode_)
 	{
 		mesh_ = std::make_shared<data_representation::Mesh>();
 		data_representation::pointsGenerator pg;
 		pg.generateRandomPoints(mesh_.get());
-		MODEL_GENERATED = true;
+		Model_Generated_ = true;
 	}
 
-	if(MODEL_GENERATED)
+	if(Model_Generated_)
 	{
 		ScalarField field;
 		BiharmonicSolver solver;
 		Image *img;
 
 		//field.init(256, 256);
-		field.init(FIELD_RESOLUTION, FIELD_RESOLUTION);
+		field.init(Field_Resolution_, Field_Resolution_);
 
 		solver.setWeights(1.0f, 1.0f, 1.0f);
 		//solver.compute(*mesh_.get(), field);
 		//solver.computeBilaplacian(*mesh_.get(), field);
 		//solver.computeComponentWise(*mesh_.get(), field);
 		//solver.computeNoGradient(*mesh_.get(), field);
-		solver.computeWith(*mesh_.get(), field, NORMAL_ALGORITHM, SMOOTHNESS_ALGORTITHM);
+		solver.computeWith(*mesh_.get(), field, Normal_Algorithm, Smoothness_Algorithm_);
 
 
 		img = field.toImage(16.0f, 0.0f);
-		if(!img->savePNG(RELATIVE_OUT_PATH_NAME))
+		if(!img->savePNG(Relative_Out_Path_Name_))
 		{
 			cout << "[ERROR] Could not save file!" << endl;
 			delete img;
