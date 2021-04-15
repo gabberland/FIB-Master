@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="1024"
+   height="1024"
+   viewBox="0 0 1024 1024"
+   version="1.1"
+   id="svg1004"
+   sodipodi:docname="Suzanne_Shell_Dashed_1024.svg"
+   inkscape:version="1.0.1 (0767f8302a, 2020-10-17)">
+  <metadata
+     id="metadata1010">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs1008">
+    <inkscape:path-effect
+       effect="dashed_stroke"
+       id="path-effect4240"
+       is_visible="true"
+       lpeversion="1"
+       numberdashes="4"
+       holefactor="0"
+       splitsegments="true"
+       halfextreme="true"
+       unifysegment="true"
+       message="Add &lt;b&gt;&quot;Fill Between Many LPE&quot;&lt;/b&gt; to add fill." />
+    <inkscape:path-effect
+       effect="dashed_stroke"
+       id="path-effect4238"
+       is_visible="true"
+       lpeversion="1"
+       numberdashes="4"
+       holefactor="0"
+       splitsegments="true"
+       halfextreme="true"
+       unifysegment="true"
+       message="Add &lt;b&gt;&quot;Fill Between Many LPE&quot;&lt;/b&gt; to add fill." />
+    <inkscape:path-effect
+       effect="dashed_stroke"
+       id="path-effect4236"
+       is_visible="true"
+       lpeversion="1"
+       numberdashes="4"
+       holefactor="0"
+       splitsegments="true"
+       halfextreme="true"
+       unifysegment="true"
+       message="Add &lt;b&gt;&quot;Fill Between Many LPE&quot;&lt;/b&gt; to add fill." />
+    <inkscape:path-effect
+       effect="dashed_stroke"
+       id="path-effect4234"
+       is_visible="true"
+       lpeversion="1"
+       numberdashes="2"
+       holefactor="0"
+       splitsegments="true"
+       halfextreme="true"
+       unifysegment="true"
+       message="Add &lt;b&gt;&quot;Fill Between Many LPE&quot;&lt;/b&gt; to add fill." />
+    <inkscape:path-effect
+       effect="dashed_stroke"
+       id="path-effect4232"
+       is_visible="true"
+       lpeversion="1"
+       numberdashes="4"
+       holefactor="0"
+       splitsegments="true"
+       halfextreme="true"
+       unifysegment="true"
+       message="Add &lt;b&gt;&quot;Fill Between Many LPE&quot;&lt;/b&gt; to add fill." />
+  </defs>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1869"
+     inkscape:window-height="1025"
+     id="namedview1006"
+     showgrid="false"
+     inkscape:zoom="0.85742188"
+     inkscape:cx="498.84953"
+     inkscape:cy="512.39012"
+     inkscape:window-x="51"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:snap-bbox="true"
+     inkscape:snap-midpoints="false"
+     inkscape:snap-text-baseline="true"
+     inkscape:document-rotation="0" />
+  <desc
+     id="desc2">, (Blender 2.92.0)</desc>
+  <g
+     inkscape:groupmode="layer"
+     id="layer1"
+     inkscape:label="root">
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 220.33626,5.484825 188.85034,5.8755319 158.12426,11.953611 129.5508,21.618128 102.02367,36.624359 73.248698,58.589384 55.72871,80.434358 36.837851,108.78089 l -12.913145,31.16336 -8.809517,26.8417 -5.9796422,29.31017 -2.795338,25.18757 -1.6712554,30.80227 0.1334055,28.32026 1.7824756,23.80643 5.2314865,28.55957 5.866613,24.19144 9.47086,26.56701 13.410676,23.11774 14.11458,22.00208 19.878763,19.02201 20.557198,15.50319 24.281299,13.81941 35.12708,12.62955 34.24077,5.66313 43.94696,0.30025 36.1897,-3.90847 44.35515,-9.28917 32.21126,-15.58335 29.92349,-24.37592 24.00298,-32.39343 11.15755,-29.65522 5.54973,-17.58992 2.67059,-10.83312 5.28374,0.0484 23.8602,0.1175 33.16534,0.83182 h 25.5957 27.37787 21.64365 24.68805 14.34422 l 14.20293,-18.34591 19.04698,-22.1912 15.71969,-20.09 9.56617,-11.88462 7.8731,-0.57257 18.46278,-0.16599 12.72958,0.41514 8.19534,7.00435 13.88604,15.19775 4.71724,4.96958 10.77085,0.41199 27.00992,-0.73816 24.9088,0.37286 5.70762,-8.13551 2.97728,-5.61208 3.46229,-3.31784 30.24422,-1.10296 h 28.73855 l 8.39091,12.31566 15.13289,26.49526 4.81054,9.84636 18.49102,-0.55841 24.95065,0.35009 10.41282,-1.02028 12.21209,-11.38873 15.20669,-14.43209 6.99521,-5.53797 13.7162,0.0351 21.37626,-0.53602 h 7.1456 l 5.7261,6.20525 14.0631,14.02371 12.8429,12.83257 6.2882,6.20147 25.5522,-0.61788 24.5092,-0.18298 11.3566,-12.04221 23.0594,-24.67085 24.0409,-22.72876 21.2239,-21.467 15.5898,-15.59127 0.1394,-16.29615 -0.8982,-12.99718 -10.3883,-3.43589 -11.2417,-2.9353 -5.5997,-8.11147 -14.4523,-12.84527 -12.5056,-17.36294 -18.0061,-12.77654 -6.4504,-7.92398 -30.5115,1.22103 -37.3876,0.0668 -52.07687,-0.93091 -54.97196,0.73006 -99.67256,0.14041 -86.14503,-0.29951 -71.28152,-0.16426 -77.18429,0.53069 -84.09487,-0.68692 -75.31887,-0.6692 -30.87088,0.0478 L 412.51791,134.2217 399.77592,106.90777 388.4903,84.382729 367.02445,59.149576 338.23171,35.295497 310.06429,20.798588 269.70834,9.6084152 238.93205,5.2782954"
+       id="path1013"
+  </g>
+</svg>
