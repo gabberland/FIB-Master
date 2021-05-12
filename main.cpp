@@ -9,6 +9,7 @@
 #include "ScalarField.h"
 #include "Image.h"
 #include "BiharmonicSolver.h"
+#include "Quadtree.h"
 
 std::shared_ptr<data_representation::Mesh> mesh_;
 
@@ -17,6 +18,7 @@ static const string GRADIENT = "gradient";
 static const string SMOOTHNESS = "2D";
 
 int					Field_Resolution_ = 64;
+int					Multigrid_Iterations_ = 1;
 float 				Normal_Size_ = .2;
 string				Relative_Out_Path_Name_ = "out.png";
 string 				Relative_In_Path_Name_;
@@ -24,10 +26,14 @@ bool				Model_Generation_Mode_ = 0;
 bool 				Model_Generated_ = 0;
 Normal				Normal_Algorithm = Normal::sampling;
 Smoothness			Smoothness_Algorithm_ = Smoothness::singleDimension;
+Solver				Solver_Method_ = Solver::BiCGSTAB;
+bool				Print_Logs_ = 1;
 
 void printUsage()
 {
-	std::cout << "Usage: reconstruction.exe [ -f | -g ] [ relative path | model generation mode ] optional: [ -n | -r | -a | -s ] [ normal size | resolution | normal algorithm (gradient or sampling) | smoothing algorithm (1D or 2D)]" << std::endl;
+	std::cout << "Usage: " << std::endl << "  reconstruction.exe [ -f | -g ] [ relative path | model generation mode ]" << std::endl << 
+	"Optional Parameters:" << std::endl << " \t[ -n | normal size ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
+	std::endl << "\t[ -x | solver method (BiCGSTAB, ConjugateGradient or LeastSquaresConjugateGradient) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -p | print logs, 0 or 1 ]" << std::endl;
 }
 void readFlagArguments(const int &argc, char **argv)
 {
@@ -40,7 +46,7 @@ void readFlagArguments(const int &argc, char **argv)
 		printUsage();
 		abort();
 	}
-	while ((c = getopt (argc, argv, "ghf:n:r:a:s:")) != -1)
+	while ((c = getopt (argc, argv, "ghf:n:r:a:s:x:i:p:")) != -1)
 	{
 		switch (c)
 		{
@@ -73,6 +79,22 @@ void readFlagArguments(const int &argc, char **argv)
 					Smoothness_Algorithm_ = Smoothness::twoDimension;
 				break;
 
+			case 'x':
+				if(optarg == "LeastSquaresConjugateGradient")
+					Solver_Method_ = Solver::LeastSquaresConjugateGradient;
+
+				else if(optarg == "ConjugateGradient")
+					Solver_Method_ = Solver::ConjugateGradient;
+				break;
+
+			case 'i':
+				Multigrid_Iterations_ = stoi(optarg);
+				break;
+
+			case 'p':
+				Print_Logs_ = stoi(optarg);
+				break;
+
 			case '?':
 				if (optopt == 'f')
 					fprintf (stderr, "Option -f requires a filepath as argument.\n");
@@ -82,6 +104,18 @@ void readFlagArguments(const int &argc, char **argv)
 				
 				else if (optopt == 'r')
 					fprintf (stderr, "Option -r requires an integer value as argument.\n");	
+
+				else if (optopt == 'a')
+					fprintf (stderr, "Option -a requires a normal type as argument.\n");	
+
+				else if (optopt == 's')
+					fprintf (stderr, "Option -s requires a smoothing type as argument.\n");	
+
+				else if (optopt == 'x')
+					fprintf (stderr, "Option -x requires a smoothing type as argument.\n");	
+
+				else if (optopt == 'p')
+					fprintf (stderr, "Option -p requires a bool value as argument.\n");	
 
 				else if (isprint (optopt))
 					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -112,7 +146,7 @@ void display() {
 	
 	for(size_t i = 0; i < mesh_->vertices_.size();  ++i)
 	{
-			glVertex2f(mesh_->vertices_[i][0], mesh_->vertices_[i][1]);
+			glVertex2f( 1 - mesh_->vertices_[i][0], 1 - mesh_->vertices_[i][1]);
 	}
 	glEnd();
 
@@ -141,18 +175,11 @@ void myinit() {
 
 void OnReshape(int w, int h)
 {
-	GLfloat formato;
-
-	if(h == 0) h = 1;
-		
-	glViewport(0, 0, w, h);
-
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-
-	formato = (GLfloat)w / (GLfloat)h;
-	if (w <= h) glOrtho (-100.0f, 100.0f, -100.0f / formato, 100.0f / formato, 1.0f, -1.0f);
-	else glOrtho (-100.0f * formato, 100.0f * formato, -100.0f, 100.0f, 1.0f, -1.0f);
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(60.0, 1.0 * (GLfloat) w / (GLfloat) h, 1.0, 30.0);
+    glMatrixMode(GL_MODELVIEW);
 }
 
 int main(int argc, char** argv) {
@@ -205,6 +232,7 @@ int main(int argc, char** argv) {
 	{
 		ScalarField field;
 		BiharmonicSolver solver;
+		Eigen::VectorXd guess;
 		Image *img;
 
 		//field.init(256, 256);
@@ -215,8 +243,10 @@ int main(int argc, char** argv) {
 		//solver.computeBilaplacian(*mesh_.get(), field);
 		//solver.computeComponentWise(*mesh_.get(), field);
 		//solver.computeNoGradient(*mesh_.get(), field);
-		solver.computeWith(*mesh_.get(), field, Normal_Algorithm, Smoothness_Algorithm_);
-
+		SolverData s = solver.computeWith(*mesh_.get(), field, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Print_Logs_);
+		//SolverData s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Print_Logs_);
+		std::cout.precision(5);
+		std::cout << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << NORMAL_STRING[Normal_Algorithm] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
 
 		img = field.toImage(16.0f, 0.0f);
 		if(!img->savePNG(Relative_Out_Path_Name_))
@@ -226,7 +256,14 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 		delete img;
-
+		
+		Quadtree qtree;
+		qtree.compute(*mesh_.get(), 8, field);
+		Image qtreeImg;
+		qtreeImg.init(1024, 1024);
+		qtree.draw(qtreeImg);
+		qtreeImg.savePNG("quadtree.png");
+		
 		// Initialize Viewer
 		//
 		glutInit(&argc, argv);
@@ -234,13 +271,14 @@ int main(int argc, char** argv) {
 		glutInitWindowSize(100, 100);
 		glutInitWindowPosition(0, 0);
 		glutCreateWindow("Point Cloud Viewer");
-
+		//glutFullScreen();
 
 		// Display Function
 		glutDisplayFunc(display);
 
 		// set the function to handle changes in screen size
 		//glutReshapeFunc(OnReshape);
+		int retCode = system("./png_visualizer.exe quadtree.png");
 
 		// Properties Init
 		myinit();

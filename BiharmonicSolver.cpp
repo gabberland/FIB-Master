@@ -1,5 +1,7 @@
 #include <iostream>
 #include <cmath>
+#include <omp.h>
+
 #include "BiharmonicSolver.h"
 #include "timing.h"
 
@@ -25,7 +27,7 @@ void BiharmonicSolver::compute(const data_representation::Mesh &cloud, ScalarFie
 	long lastTime = getTimeMilliseconds();
 	
 	nEquations = 3 * cloud.vertices_.size() + (field.width() - 2) * (field.height() - 2);
-	//nEquations += 2 * field.width() + 2 * field.height() - 8;
+	nEquations += 2 * field.width() + 2 * field.height() - 8;
 	nUnknowns = field.width() * field.height();
 	
 	cout << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
@@ -52,7 +54,7 @@ void BiharmonicSolver::compute(const data_representation::Mesh &cloud, ScalarFie
 			eqIndex++;
 		}
 
-	/*
+	
 	for(unsigned int i=1; i<(field.width()-1); i++)
 	{
 		addHorizontalBoundarySmoothnessEquation(eqIndex, field, i, 0, triplets, b);
@@ -67,7 +69,7 @@ void BiharmonicSolver::compute(const data_representation::Mesh &cloud, ScalarFie
 		addVerticalBoundarySmoothnessEquation(eqIndex, field, field.width()-1, j, triplets, b);
 		eqIndex++;
 	}
-	*/
+	
 	
 	cout << "Total equations added: " << eqIndex << endl;
 	
@@ -487,16 +489,6 @@ void BiharmonicSolver::addSamplingEquations(const data_representation::Mesh &clo
 
 void BiharmonicSolver::addOneDimensionalSmoothnessEquations(unsigned int &eqIndex, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
 {
-	for(unsigned int j=1; j<(field.height()-1); j++)
-		for(unsigned int i=1; i<(field.width()-1); i++)
-		{
-			addSmoothnessEquation(eqIndex, field, i, j, triplets, b);
-			eqIndex++;
-		}
-}
-
-void BiharmonicSolver::addTwoDimensionalSmoothnessEquations(unsigned int &eqIndex, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
-{
 	for(unsigned int j=0; j<field.height(); j++)
 		for(unsigned int i=1; i<(field.width()-1); i++)
 		{
@@ -510,27 +502,56 @@ void BiharmonicSolver::addTwoDimensionalSmoothnessEquations(unsigned int &eqInde
 			addVerticalBoundarySmoothnessEquation(eqIndex, field, i, j, triplets, b);
 			eqIndex++;
 		}
+
 }
 
-void BiharmonicSolver::computeWith(const data_representation::Mesh &cloud, ScalarField &field, const int &normal_type, const int &smoothness_type)
+void BiharmonicSolver::addTwoDimensionalSmoothnessEquations(unsigned int &eqIndex, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
+{	
+	for(unsigned int j=1; j<(field.height()-1); j++)
+		for(unsigned int i=1; i<(field.width()-1); i++)
+		{
+			addSmoothnessEquation(eqIndex, field, i, j, triplets, b);
+			eqIndex++;
+		}	
+
+	for(unsigned int i=1; i<(field.width()-1); i++)
+	{
+		addHorizontalBoundarySmoothnessEquation(eqIndex, field, i, 0, triplets, b);
+		eqIndex++;
+		addHorizontalBoundarySmoothnessEquation(eqIndex, field, i, field.height()-1, triplets, b);
+		eqIndex++;
+	}
+	for(unsigned int j=1; j<(field.height()-1); j++)
+	{
+		addVerticalBoundarySmoothnessEquation(eqIndex, field, 0, j, triplets, b);
+		eqIndex++;
+		addVerticalBoundarySmoothnessEquation(eqIndex, field, field.width()-1, j, triplets, b);
+		eqIndex++;
+	}
+}
+
+SolverData BiharmonicSolver::computeWith(const data_representation::Mesh &cloud, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const bool &printLogs)
 {
 	unsigned int nEquations, nUnknowns;
+	SolverData outData;
 	
-	cout << "[MESSAGE] Preparing the system with " << normal_type << " normal equations and " << smoothness_type << " smoothing equation ..." << endl;
+	if(printLogs) cout << "[MESSAGE] Preparing the system with " << normal_type << " normal equations and " << smoothness_type << " smoothing equation ..." << endl;
 	long lastTime = getTimeMilliseconds();
 	
 	if(smoothness_type == Smoothness::singleDimension)
 	{
-		nEquations = 3 * cloud.vertices_.size() + (field.width() - 2) * (field.height() - 2);
+		nEquations = 3 * cloud.vertices_.size() + 2 * field.width() * field.height() - 2 * field.width() - 2 * field.height();
+
 	}
 	else if (smoothness_type == Smoothness::twoDimension)
 	{
-		nEquations = 3 * cloud.vertices_.size() + 2 * field.width() * field.height() - 2 * field.width() - 2 * field.height();
+		nEquations = 3 * cloud.vertices_.size() + (field.width() - 2) * (field.height() - 2);
+		nEquations += 2 * field.width() + 2 * field.height() - 8;
 	}	
 
 	nUnknowns = field.width() * field.height();
 	
-	cout << "[MESSAGE] Added " << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
+	if(printLogs) cout << "[MESSAGE] Added " << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
 
 	Eigen::SparseMatrix<double> A(nEquations, nUnknowns), AtA;
 	Eigen::VectorXd b(nEquations), Atb, x;
@@ -557,48 +578,274 @@ void BiharmonicSolver::computeWith(const data_representation::Mesh &cloud, Scala
 		addTwoDimensionalSmoothnessEquations(eqIndex, field, triplets, b);
 	}
 	
-	cout << "[DATA] Total equations added: " << eqIndex << endl;
+	if(printLogs) cout << "[DATA] Total equations added: " << eqIndex << endl;
 	
 	A.setFromTriplets(triplets.begin(), triplets.end());
 
-	cout << "[TIME] Building A & b in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+	time_t sysTime = getTimeMilliseconds() - lastTime;
+	outData.systemBuildTime = sysTime;
+	if(printLogs) cout << "[TIME] Building A & b in " << sysTime << " ms" << endl;
 
-	cout << "[MESSAGE] Computing normal equation..." << endl;
+	if(printLogs) cout << "[MESSAGE] Computing normal equation..." << endl;
 	lastTime = getTimeMilliseconds();
 	
 	AtA = A.transpose() * A;
 	Atb = A.transpose() * b;
 	
-	cout << "[TIME]  AtA & Atb in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+	time_t buildTime = getTimeMilliseconds() - lastTime;
+	outData.matrixBuildTime = buildTime;
+	if(printLogs) cout << "[TIME]  AtA & Atb in " << buildTime << " ms" << endl;
 
-	cout << "[MESSAGE] Solving least squares ..." << endl;
+	if(printLogs) cout << "[MESSAGE] Solving least squares ..." << endl;
 	lastTime = getTimeMilliseconds();
 
+	int n = Eigen::nbThreads();
+	if(printLogs) std::cout << "[INFO] Initial number Threads: " << n << std::endl;
+
+	Eigen::initParallel();
+	omp_set_num_threads(16);
+	Eigen::setNbThreads(16);
+	n = Eigen::nbThreads();
+	if(printLogs) std::cout << "[INFO] Number Threads used: " << n << std::endl;
 	
-	Eigen::BiCGSTAB<Eigen::SparseMatrix<double>> cg;
+	Eigen::BiCGSTAB<Eigen::SparseMatrix<double, Eigen::RowMajor>> cg;
+	//Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper> cg;
+	
 	cg.setTolerance(1e-5);
 	cg.compute(AtA);
 	Eigen::ComputationInfo info = cg.info();
+	outData.isSolved = 1;
 	if(info!=Eigen::Success)
-		cout << "[ERROR] Decomposition failed!!!" << endl;	
+	{
+		outData.isSolved = 0;
+		if(printLogs) cout << "[ERROR] Decomposition failed!!!" << endl;	
+	}
 	x = cg.solve(Atb);
 	info = cg.info();
 	if(info!=Eigen::Success)
-		cout << "[ERROR] Solving failed!!!" << endl;
+	{
+		outData.isSolved = 0;
+		if(printLogs) cout << "[ERROR] Solving failed!!!" << endl;
+	}
 	
-	cout << "[TIME] Least squares solved in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
-	
+	time_t solveTime =(getTimeMilliseconds() - lastTime);
+	if(printLogs) cout << "[TIME] Least squares solved in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+	outData.solverResolutionTime = solveTime;
+
 	double relative_error = (A*x - b).norm() / b.norm();
 	
-	cout << "[DATA] The relative error is: " << relative_error << endl;
-	cout << "[DATA] Error: " << cg.error() << endl;
-	cout << "[DATA] Iterations: " << cg.iterations() << endl;
+	outData.error = cg.error();
+	outData.iterations = cg.iterations();
+
+	if(printLogs) cout << "[DATA] The relative error is: " << relative_error << endl;
+	if(printLogs) cout << "[DATA] Error: " << cg.error() << endl;
+	if(printLogs) cout << "[DATA] Iterations: " << cg.iterations() << endl;
 		
 	for(unsigned int j=0, pos=0; j<field.height(); j++)
 		for(unsigned int i=0; i<field.width(); i++, pos++)
 			field(i, j) = x(pos);
+
+	return outData;
 }
 
+SolverData BiharmonicSolver::computeMultigrid(const data_representation::Mesh &cloud, ScalarField &field, int iterations, const int &normal_type, const int &smoothness_type, const int &solver_method, const bool &printLogs)
+{
+
+	if(printLogs) cout << "[MESSAGE] First will generate a base solution of field size: " << field.width() << endl;
+
+	// Solve first grid
+	computeWith(cloud, field, normal_type, smoothness_type, solver_method, 0);
+
+	if(printLogs) cout << "[MESSAGE] Base solution generated!" << endl;
+
+	SolverData outData;
+	ScalarField actualField = field;
+	
+	while (iterations > 0)
+	{
+		// Compute new field size & guess
+		size_t newFieldSize = std::max(actualField.height()-1, actualField.width()-1) * 2 + 1;
+		if(printLogs) cout << endl << "[MESSAGE] Dividing new field with size: " << newFieldSize << endl;
+		Eigen::VectorXd guess = divideField(actualField);
+
+		if(printLogs) cout << "[MESSAGE] New Guess field generated " << endl;
+
+		// Initialize new gridfield
+		field.init(newFieldSize, newFieldSize);
+
+		unsigned int nEquations, nUnknowns;
+		
+		if(printLogs) cout << "[MESSAGE] Preparing the system with " << normal_type << " normal equations and " << smoothness_type << " smoothing equation ..." << endl;
+		long lastTime = getTimeMilliseconds();
+		
+		if(smoothness_type == Smoothness::singleDimension)
+		{
+			nEquations = 3 * cloud.vertices_.size() + 2 * field.width() * field.height() - 2 * field.width() - 2 * field.height();
+
+		}
+		else if (smoothness_type == Smoothness::twoDimension)
+		{
+			nEquations = 3 * cloud.vertices_.size() + (field.width() - 2) * (field.height() - 2);
+			nEquations += 2 * field.width() + 2 * field.height() - 8;
+		}	
+
+		nUnknowns = field.width() * field.height();
+		
+		if(printLogs) cout << "[MESSAGE] Added " << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
+
+		Eigen::SparseMatrix<double> A(nEquations, nUnknowns), AtA;
+		Eigen::VectorXd b(nEquations), Atb, x;
+		vector<Eigen::Triplet<double>> triplets;
+		unsigned int eqIndex = 0;
+
+		if (normal_type == Normal::gradient)
+		{
+			addGradientEquations(cloud, field, eqIndex, triplets, b);
+		}
+
+		else if(normal_type == Normal::sampling)
+		{
+			addSamplingEquations(cloud, field, eqIndex, triplets, b);
+		}
+
+		if(smoothness_type == Smoothness::singleDimension)
+		{
+			addOneDimensionalSmoothnessEquations(eqIndex, field, triplets, b);
+		} 
+		
+		else if(smoothness_type == Smoothness::twoDimension)
+		{
+			addTwoDimensionalSmoothnessEquations(eqIndex, field, triplets, b);
+		}
+		
+		if(printLogs) cout << "[DATA] Total equations added: " << eqIndex << endl;
+		
+		A.setFromTriplets(triplets.begin(), triplets.end());
+
+		time_t sysTime = getTimeMilliseconds() - lastTime;
+		outData.systemBuildTime = sysTime;
+		if(printLogs) cout << "[TIME] Building A & b in " << sysTime << " ms" << endl;
+
+		if(printLogs) cout << "[MESSAGE] Computing normal equation..." << endl;
+		lastTime = getTimeMilliseconds();
+		
+		AtA = A.transpose() * A;
+		Atb = A.transpose() * b;
+		
+		time_t buildTime = getTimeMilliseconds() - lastTime;
+		outData.matrixBuildTime = buildTime;
+		if(printLogs) cout << "[TIME]  AtA & Atb in " << buildTime << " ms" << endl;
+
+		if(printLogs) cout << "[MESSAGE] Solving least squares ..." << endl;
+		lastTime = getTimeMilliseconds();
+
+		int n = Eigen::nbThreads();
+		if(printLogs) std::cout << "[INFO] Initial number Threads: " << n << std::endl;
+
+		Eigen::initParallel();
+		omp_set_num_threads(16);
+		Eigen::setNbThreads(16);
+		n = Eigen::nbThreads();
+		if(printLogs) std::cout << "[INFO] Number Threads used: " << n << std::endl;
+		
+		//Eigen::BiCGSTAB<Eigen::SparseMatrix<double, Eigen::RowMajor>> cg;
+		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper> cg;
+
+		cg.setTolerance(1e-5);
+		cg.compute(AtA);
+		Eigen::ComputationInfo info = cg.info();
+		if(info!=Eigen::Success)
+		{
+			outData.isSolved = 0;
+			if(printLogs) cout << "[ERROR] Decomposition failed!!!" << endl;	
+		}
+		x = cg.solveWithGuess(Atb, guess);
+		info = cg.info();
+		if(info!=Eigen::Success)
+		{
+			outData.isSolved = 0;
+			if(printLogs) cout << "[ERROR] Solving failed!!!" << endl;
+		}
+		
+		time_t solveTime =(getTimeMilliseconds() - lastTime);
+		if(printLogs) cout << "[TIME] Least squares solved in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+		outData.solverResolutionTime = solveTime;
+
+		double relative_error = (A*x - b).norm() / b.norm();
+		
+		outData.error = cg.error();
+		outData.iterations = cg.iterations();
+
+		if(printLogs) cout << "[DATA] The relative error is: " << relative_error << endl;
+		if(printLogs) cout << "[DATA] Error: " << cg.error() << endl;
+		if(printLogs) cout << "[DATA] Iterations: " << cg.iterations() << endl;
+			
+		for(unsigned int j=0, pos=0; j<field.height(); j++)
+			for(unsigned int i=0; i<field.width(); i++, pos++)
+				field(i, j) = x(pos);
+
+		--iterations;
+		actualField = field;
+	}
+	return outData;
+}
+
+Eigen::VectorXd BiharmonicSolver::divideField(const ScalarField &field)
+{
+	ScalarField dividedField;
+	size_t newFieldSize = std::max(field.height()-1, field.width()-1) * 2 + 1;
+	dividedField.init(newFieldSize, newFieldSize);
+
+	for(unsigned int j=0, pos=0; j < newFieldSize; j++)
+		for(unsigned int i=0; i < newFieldSize; i++)
+		{
+			//If we move through the original row divisions, we will assign itselves
+			if(j % 2 == 0)
+			{
+				// If we move through the original column divisions, we will assign itselves
+				if(i % 2 == 0)
+				{
+					dividedField(i,j) = field((size_t)i/2, (size_t)j/2);
+				}
+				// If we move through a new column division, we will interpolate its 2 neighbor values
+				else
+				{
+					int leftValue  = field((size_t)i/2,    (size_t)j/2);
+					int rightValue = field((size_t)i/2 + 1, (size_t)j/2);
+					dividedField(i,j) = (float)(leftValue+rightValue) / 2;
+				}
+			}
+
+			else
+			{
+				// If we move through a new column division, we will interpolate its 2 neighbor values
+				if(i % 2 == 0)
+				{
+					int topValue    = field((size_t)i/2, (size_t)j/2);
+					int bottomValue = field((size_t)i/2, (size_t)j/2 + 1);
+					dividedField(i,j) = (float)(topValue+bottomValue) / 2;
+				}
+				// If we move through a new row & column subdivision, we will interpolate the value of its 4 original neighbors
+				else
+				{					
+					int topLeftValue     = field((size_t)i/2,     (size_t)j/2);
+					int topRightValue    = field((size_t)i/2 + 1, (size_t)j/2);
+					int bottomLeftValue  = field((size_t)i/2,     (size_t)j/2 + 1);
+					int bottomRightValue = field((size_t)i/2 + 1, (size_t)j/2 + 1);
+					
+					// New field value is the average of the 4 neighbors
+					dividedField(i,j) = (float)(topLeftValue+topRightValue+bottomLeftValue+bottomRightValue) / 4;
+				}
+			}
+		}
+
+	Eigen::VectorXd out(newFieldSize*newFieldSize);
+	for(unsigned int j=0, pos=0; j<dividedField.height(); j++)
+		for(unsigned int i=0; i<dividedField.width(); i++, pos++)
+			out(pos) = dividedField(i, j);
+
+	return out;
+}
 
 
 

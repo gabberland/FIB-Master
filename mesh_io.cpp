@@ -26,8 +26,8 @@ bool ReadTxtHeader(std::ifstream *fin, int &vertices)
 
   fin->getline(line, 100);
   vertices = atoi(&line[0]);
-  std::cout << "Loading point cloud mesh" << std::endl;
-  std::cout << "\tVertices = " << vertices << std::endl;
+  //std::cout << "Loading point cloud mesh" << std::endl;
+  //std::cout << "\tVertices = " << vertices << std::endl;
 
   return true;
 }
@@ -89,6 +89,24 @@ void ComputeVertexNormals(Mesh *mesh)
     size_t j = (i+1) % kVertices;
     mesh->normals_[i] = (normals[i]+normals[j]).normalized();
   }
+}
+
+std::vector<Coordinate2d> GiveVertexNormals(const std::vector<Coordinate2d> &vertices) 
+{
+  const size_t kVertices = vertices.size();
+  std::vector<Coordinate2d> n(kVertices);
+  std::vector<Coordinate2d>normals(kVertices);
+  for (size_t i = 0; i < kVertices; ++i) {
+    size_t j = (i+1) % kVertices;
+    Coordinate2d edge_vec = vertices[j] - vertices[i];
+    normals[i] = Coordinate2d(-edge_vec.y(), edge_vec.x()).normalized();
+  }
+
+  for (size_t i = 0; i < kVertices; ++i) {
+    size_t j = (i+1) % kVertices;
+    n[i] = (normals[i]+normals[j]).normalized();
+  }
+  return n;
 }
 
 std::vector<data_representation::Coordinate2d> ComputeVertexNormals(const std::vector<data_representation::Coordinate2d> &v) 
@@ -200,14 +218,14 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
               }
               
             }
+
         }
 
+      normals = GiveVertexNormals(vertices);
       mesh->vertices_.insert(mesh->vertices_.end(), vertices.begin(), vertices.end());
+      mesh->normals_.insert(mesh->normals_.end(), normals.begin(), normals.end());
+
     }
-
-    ComputeBoundingBox(mesh->vertices_, mesh);
-
-    ComputeVertexNormals(mesh);
 
     if(std::max(mesh->max_[0],mesh->max_[1]) > 1)
     {
