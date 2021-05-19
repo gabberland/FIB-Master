@@ -154,9 +154,9 @@ void display() {
 	glBegin(GL_LINES);
 	for(size_t i = 0; i < mesh_->normals_.size();  ++i)
 	{
-			glVertex2f(mesh_->vertices_[i][0], mesh_->vertices_[i][1]);
+			glVertex2f(1- mesh_->vertices_[i][0], 1- mesh_->vertices_[i][1]);
 
-			glVertex2f(mesh_->vertices_[i][0] + (Normal_Size_ *mesh_->normals_[i][0]), mesh_->vertices_[i][1] + (Normal_Size_ * mesh_->normals_[i][1]));
+			glVertex2f(1 - mesh_->vertices_[i][0] - (Normal_Size_ *mesh_->normals_[i][0]), 1 - mesh_->vertices_[i][1] - (Normal_Size_ * mesh_->normals_[i][1]));
 	}
 	glEnd();
 
@@ -278,8 +278,9 @@ int main(int argc, char** argv) {
 
 		// set the function to handle changes in screen size
 		//glutReshapeFunc(OnReshape);
-		int retCode = system("./png_visualizer.exe quadtree.png");
-
+		std::string exePath = "./png_visualizer " + Relative_Out_Path_Name_ + " &";
+		int retCode = system(exePath.c_str());
+		int retCode_quadtree = system("./png_visualizer quadtree.png &");
 		// Properties Init
 		myinit();
 		glutMainLoop();

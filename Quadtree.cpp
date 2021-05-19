@@ -175,6 +175,7 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	size_t cloudSize = cloud.vertices_.size();
 
 	// Create quatree
+	cout << "[INFO] Generating Quadtree" << endl;
 	root = new QuadtreeNode();
 	for(unsigned int i=0; i<4; i++)
 		root->children[i] = NULL;
@@ -193,31 +194,31 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	// Collect corners
 	root->collectCorners(this);
 	
-	cout << "# Unknowns = " << nUnknowns << endl;
+	cout << "[DATA] # Unknowns = " << nUnknowns << endl;
 	
 	// Prepare linear system
-	unsigned int nEquations, nUnknowns;
+	unsigned int nEquations;
 	
-	cout << "Preparing the system" << endl;
+	cout << "[INFO] Preparing Quadtree the system" << endl;
 	long lastTime = getTimeMilliseconds();
 	
 	nEquations = 0;
-	nUnknowns = nUnknowns;
 
 	vector<Eigen::Triplet<double>> triplets;
 	vector<float> bCoeffs;
-	/*
+	
 	for(unsigned int i=0; i<cloudSize; i++)
 	{
-		addPointEquation(nEquations, cloud.point(i), triplets, bCoeffs);
+		addPointEquation(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), triplets, bCoeffs);
 		nEquations++;
 	}
-	for(unsigned int i=0; i<cloud.size(); i++)
+	for(unsigned int i=0; i<cloudSize; i++)
 	{
-		addGradientEquations(nEquations, cloud.point(i), cloud.normal(i), triplets, bCoeffs);
+		addGradientEquations(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), 
+							glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs);
 		nEquations += 2;
 	}
-
+	/*
 	for(unsigned int j=0; j<field.height(); j++)
 		for(unsigned int i=1; i<(field.width()-1); i++)
 	{
@@ -231,8 +232,6 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 		nEquations++;
 	}
 	*/
-	// TODO
-	
 	cout << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
 	
 	Eigen::SparseMatrix<double> A(nEquations, nUnknowns), AtA;
@@ -291,7 +290,7 @@ unsigned int Quadtree::pointToInteger(const glm::vec2 &P) const
 	return (unsigned int)round((1 << nLevels) * P.y) * ((1 << nLevels) + 1) + (unsigned int)round((1 << nLevels) * P.x);
 }
 
-void Quadtree::addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs)
+void Quadtree::addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value)
 {
 	QuadtreeNode *node;
 	float x, y;
@@ -303,15 +302,84 @@ void Quadtree::addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[2], pW*(1.0f-x)*y));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[1], pW*x*(1.0f-y)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[0], pW*(1.0f-x)*(1.0f-y)));
-	bCoeffs.push_back(0.0f);
+	bCoeffs.push_back(value);
 }
 
 void Quadtree::addGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs)
 {
-	// TODO
+	QuadtreeNode *node;
+	unsigned int i, j;
+	float x, y;
+	
+	node = pointToCell(P);
+	uint nodeWidth  = node->maxCoords.x - node->minCoords.x;
+	uint nodeHeight = node->maxCoords.y - node->minCoords.y;
+	i = (unsigned int)floor(P.x * (nodeWidth - 1));
+	i = glm::max(0u, glm::min(i, nodeWidth-2));
+	j = (unsigned int)floor(P.y * (nodeHeight - 1));
+	j = glm::max(0u, glm::min(j, nodeHeight-2));
+	
+	x = P.x * (nodeWidth - 1) - float(i);
+	y = P.y * (nodeHeight - 1) - float(j);
+	
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[3], gW*y));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[2], -gW*y));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[1], gW*(1.0f-y)));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[0], -gW*(1.0f-y)));
+	
+	bCoeffs.push_back(gW*N.x);
+
+	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[3], gW*x));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[2], gW*(1.0f-x)));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[1], -gW*x));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[0], -gW*(1.0f-x)));
+	
+	bCoeffs.push_back(gW*N.y);
+}
+void Quadtree::addSamplingEquations(const data_representation::Mesh &cloud, unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs)
+{
+	for(unsigned int i=0; i<cloud.vertices_.size(); i++)
+	{
+		QuadtreeNode *node = pointToCell(P);
+		uint nodeWidth  = node->maxCoords.x - node->minCoords.x;
+		uint nodeHeight = node->maxCoords.y - node->minCoords.y;
+		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), triplets, bCoeffs);
+		eqIndex++;
+		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) + (1.0f /  (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, 1.0f);
+		eqIndex++;
+		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) - (1.0f / (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, -1.0f);
+		eqIndex++;
+	}
 }
 
+int Quadtree::addHorizontalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value)
+{
+	QuadtreeNode *node = pointToCell(P);
+	
 
+	//Construir estructura unknowns index by position (menstres construim octree setCorners() )
+
+	// Comprobar que realment es pot fer la equacio
+	// no pot haver ni x min ni x max
+	// si true retorn 0
+
+	// si false calcula eq i retorna 1
+		//
+
+/*
+	//Casi identica
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -sW*2.0f));
+
+	//Comprovar si son corners
+	//si no ho son, traduir en quin node quadtree es troba -> interpolacio similar point eq
+
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i+1, j), sW*1.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i-1, j), sW*1.0f));
+*/	
+	bCoeffs.push_back(0.0f);
+
+	return 0;
+}
 
 
 

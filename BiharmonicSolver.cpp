@@ -391,14 +391,14 @@ void BiharmonicSolver::addGradientEquations(unsigned int eqIndex, const glm::vec
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i+1, j), gW*(1.0f-y)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -gW*(1.0f-y)));
 	
-	b(eqIndex) = gW*N.x;
+	b(eqIndex) = gW* 64 / (field.width()-1)*N.x;
 
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, unknownIndex(field, i+1, j+1), gW*x));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, unknownIndex(field, i, j+1), gW*(1.0f-x)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, unknownIndex(field, i+1, j), -gW*x));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, unknownIndex(field, i, j), -gW*(1.0f-x)));
 	
-	b(eqIndex+1) = gW*N.y;
+	b(eqIndex+1) = gW* 64 / (field.height()-1) * N.y;
 }
 
 void BiharmonicSolver::addSmoothnessEquation(unsigned int eqIndex, const ScalarField &field, unsigned int i, unsigned int j, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
@@ -437,20 +437,20 @@ void BiharmonicSolver::addBilaplacianSmoothnessEquation(unsigned int eqIndex, co
 
 void BiharmonicSolver::addHorizontalBoundarySmoothnessEquation(unsigned int eqIndex, const ScalarField &field, unsigned int i, unsigned int j, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
 {
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -sW*2.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -sW * (field.width()-1)/64 * 2.0f));
 
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i+1, j), sW*1.0f));
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i-1, j), sW*1.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i+1, j), sW * (field.width()-1)/64 * 1.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i-1, j), sW * (field.width()-1)/64 * 1.0f));
 	
 	b(eqIndex) = 0.0f;
 }
 
 void BiharmonicSolver::addVerticalBoundarySmoothnessEquation(unsigned int eqIndex, const ScalarField &field, unsigned int i, unsigned int j, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b)
 {
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -sW*2.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j), -sW * (field.height()-1)/64 * 2.0f));
 
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j+1), sW*1.0f));
-	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j-1), sW*1.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j+1), sW * (field.height()-1)/64 * 1.0f));
+	triplets.push_back(Eigen::Triplet<double>(eqIndex, unknownIndex(field, i, j-1), sW * (field.height()-1)/64 * 1.0f));
 	
 	b(eqIndex) = 0.0f;
 }
@@ -480,9 +480,9 @@ void BiharmonicSolver::addSamplingEquations(const data_representation::Mesh &clo
 	{
 		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), field, triplets, b);
 		eqIndex++;
-		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) + (1.0f / field.width()) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), field, triplets, b, 1.0f);
+		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) + (1.0f / 64) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), field, triplets, b, 1.0f);
 		eqIndex++;
-		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) - (1.0f / field.height()) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), field, triplets, b, -1.0f);
+		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) - (1.0f / 64) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), field, triplets, b, -1.0f);
 		eqIndex++;
 	}
 }
@@ -810,28 +810,28 @@ Eigen::VectorXd BiharmonicSolver::divideField(const ScalarField &field)
 				// If we move through a new column division, we will interpolate its 2 neighbor values
 				else
 				{
-					int leftValue  = field((size_t)i/2,    (size_t)j/2);
-					int rightValue = field((size_t)i/2 + 1, (size_t)j/2);
+					float leftValue  = field((size_t)i/2,    (size_t)j/2);
+					float rightValue = field((size_t)i/2 + 1, (size_t)j/2);
 					dividedField(i,j) = (float)(leftValue+rightValue) / 2;
 				}
 			}
 
 			else
 			{
-				// If we move through a new column division, we will interpolate its 2 neighbor values
+				// If we move through a new column division, we will floaterpolate its 2 neighbor values
 				if(i % 2 == 0)
 				{
-					int topValue    = field((size_t)i/2, (size_t)j/2);
-					int bottomValue = field((size_t)i/2, (size_t)j/2 + 1);
+					float topValue    = field((size_t)i/2, (size_t)j/2);
+					float bottomValue = field((size_t)i/2, (size_t)j/2 + 1);
 					dividedField(i,j) = (float)(topValue+bottomValue) / 2;
 				}
-				// If we move through a new row & column subdivision, we will interpolate the value of its 4 original neighbors
+				// If we move through a new row & column subdivision, we will floaterpolate the value of its 4 original neighbors
 				else
 				{					
-					int topLeftValue     = field((size_t)i/2,     (size_t)j/2);
-					int topRightValue    = field((size_t)i/2 + 1, (size_t)j/2);
-					int bottomLeftValue  = field((size_t)i/2,     (size_t)j/2 + 1);
-					int bottomRightValue = field((size_t)i/2 + 1, (size_t)j/2 + 1);
+					float topLeftValue     = field((size_t)i/2,     (size_t)j/2);
+					float topRightValue    = field((size_t)i/2 + 1, (size_t)j/2);
+					float bottomLeftValue  = field((size_t)i/2,     (size_t)j/2 + 1);
+					float bottomRightValue = field((size_t)i/2 + 1, (size_t)j/2 + 1);
 					
 					// New field value is the average of the 4 neighbors
 					dividedField(i,j) = (float)(topLeftValue+topRightValue+bottomLeftValue+bottomRightValue) / 4;

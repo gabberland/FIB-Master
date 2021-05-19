@@ -53,8 +53,11 @@ private:
 	QuadtreeNode *pointToCell(const glm::vec2 &P);
 	unsigned int pointToInteger(const glm::vec2 &P) const;
 
-	void addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs);
+	void addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0f);
 	void addGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs);
+	void addSamplingEquations(const data_representation::Mesh &cloud, unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs);
+	int addHorizontalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0f);
+	int addVerticalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0f);
 
 private:
 	unsigned int nLevels, nUnknowns;
@@ -65,6 +68,7 @@ private:
 	
 	friend class QuadtreeNode;
 
+	//map<glm::ivec2, int>;
 };
 
 
