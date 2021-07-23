@@ -6,4 +6,4 @@ Compilation Steps:
   - Create new build directory (mkdir build)
   - In build directory: (cmake ../)
   - Compile : (make)
-  - Run executable
+  - Run executable (help: ./reconstrucion -h)
