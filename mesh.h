@@ -42,6 +42,10 @@ class Mesh {
 
   void normalizePointValues();
 
+  void computeBoundingBox(); 
+
+  void addNoise(const double &mean, const double &standardDev);
+
   /**
    * @brief min The minimum point of the bounding box.
    */

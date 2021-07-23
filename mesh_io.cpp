@@ -62,18 +62,6 @@ void ReadTxtVertices(std::ifstream *fin, Mesh *mesh)
   }
 }
 
-
-void ComputeBoundingBox(const std::vector<Coordinate2d> vertices, Mesh *mesh) 
-{
-  const size_t kVertices = vertices.size();
-  for (size_t i = 0; i < kVertices; ++i) {
-    mesh->min_[0] = std::min(mesh->min_[0], vertices[i][0]);
-    mesh->min_[1] = std::min(mesh->min_[1], vertices[i][1]);
-
-    mesh->max_[0] = std::max(mesh->max_[0], vertices[i][0]);
-    mesh->max_[1] = std::max(mesh->max_[1], vertices[i][1]);
-  }
-}
 void ComputeVertexNormals(Mesh *mesh) 
 {
   mesh->normals_.resize(mesh->vertices_.size());
@@ -126,7 +114,7 @@ std::vector<data_representation::Coordinate2d> ComputeVertexNormals(const std::v
   return r;
 }
 
-bool ReadFromTXT(const std::string &filename, Mesh *mesh) 
+bool ReadFromTXT(const std::string &filename, Mesh *mesh, const float &noise) 
 {
     std::ifstream fin;
 
@@ -145,8 +133,8 @@ bool ReadFromTXT(const std::string &filename, Mesh *mesh)
     ReadTxtVertices(&fin, mesh);
 
     fin.close();
-
-    ComputeBoundingBox(mesh->vertices_, mesh);
+    mesh->addNoise(0, noise);
+    mesh->computeBoundingBox();
 
     return true;
 }
@@ -215,8 +203,7 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
 
                 std::cout << "ADDED " << coord << std::endl;
 
-              }
-              
+              }             
             }
 
         }
@@ -224,14 +211,12 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
       normals = GiveVertexNormals(vertices);
       mesh->vertices_.insert(mesh->vertices_.end(), vertices.begin(), vertices.end());
       mesh->normals_.insert(mesh->normals_.end(), normals.begin(), normals.end());
+      mesh->computeBoundingBox(); 
 
     }
-
-    if(std::max(mesh->max_[0],mesh->max_[1]) > 1)
-    {
       mesh->normalizePointValues();
-      ComputeBoundingBox(mesh->vertices_, mesh);
-    }
+      mesh->computeBoundingBox();
+
     
     mesh->writeTxtFile("out.txt");
     return true;

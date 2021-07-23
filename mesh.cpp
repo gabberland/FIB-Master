@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <random>
 #include <GL/glew.h>
 #include <GL/glut.h>
 
@@ -56,4 +57,40 @@ void Mesh::normalizePointValues()
     vertices_[i].y() = (float)(vertices_[i].y() * 0.8f / max + 0.1);
   }
 }
+
+void Mesh::computeBoundingBox() 
+{
+  const size_t kVertices = vertices_.size();
+  for (size_t i = 0; i < kVertices; ++i) {
+    min_[0] = std::min(min_[0], vertices_[i][0]);
+    min_[1] = std::min(min_[1], vertices_[i][1]);
+
+    max_[0] = std::max(max_[0], vertices_[i][0]);
+    max_[1] = std::max(max_[1], vertices_[i][1]);
+  }
+}
+
+void Mesh::addNoise(const double &mean, const double &standardDev)
+{
+      // random device class instance, source of 'true' randomness for initializing random seed
+    std::random_device rd; 
+
+    // Mersenne twister PRNG, initialized with seed from previous random device instance
+    std::mt19937 gen(rd()); 
+    
+    int i;
+    double sample;
+    for(i = 0; i < vertices_.size(); ++i)
+    {
+        // instance of class std::normal_distribution with specific mean and stddev
+        std::normal_distribution<double> d(mean, standardDev); 
+
+        // get random number with normal distribution using gen as random source
+        sample = d(gen); 
+        Coordinate2d displ = normals_[i] * sample;
+        vertices_[i] += displ;
+    }
+}
+
+
 }  // namespace data_representation

@@ -203,8 +203,8 @@ void keyboard(unsigned char key, int x, int y)
 int
 main(int argc, char** argv) {
 
-  if(argc < 2){
-    std::cerr << "Usage: ./[exec] [png_filename]" << std::endl;
+  if(argc < 4){
+    std::cerr << "Usage: ./[exec] [png_filename] [image width] [image height]" << std::endl;
     exit(-1);
   }
 
@@ -217,7 +217,7 @@ main(int argc, char** argv) {
 
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_RGB);
-  glutInitWindowSize(PRJ_WIDTH, PRJ_HEIGHT);
+  glutInitWindowSize(std::stoi(argv[2]), std::stoi(argv[3]));
   glutCreateWindow("PNG texture");
   //glutFullScreen();
   init(pngFileName);

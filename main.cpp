@@ -16,10 +16,14 @@ std::shared_ptr<data_representation::Mesh> mesh_;
 static const int 	PIXEL_MARGINS = 1;
 static const string GRADIENT = "gradient";
 static const string SMOOTHNESS = "2D";
+static const string LEAST_SQUARES = "LeastSquares";
+static const string CONJUGATE = "Conjugate";
 
 int					Field_Resolution_ = 64;
 int					Multigrid_Iterations_ = 1;
+int					Num_Threads_ = 8;
 float 				Normal_Size_ = .2;
+float 				Gaussian_Noise_ = 0;
 string				Relative_Out_Path_Name_ = "out.png";
 string 				Relative_In_Path_Name_;
 bool				Model_Generation_Mode_ = 0;
@@ -27,13 +31,14 @@ bool 				Model_Generated_ = 0;
 Normal				Normal_Algorithm = Normal::sampling;
 Smoothness			Smoothness_Algorithm_ = Smoothness::singleDimension;
 Solver				Solver_Method_ = Solver::BiCGSTAB;
+bool				Multigrid_ = 0;
 bool				Print_Logs_ = 1;
 
 void printUsage()
 {
 	std::cout << "Usage: " << std::endl << "  reconstruction.exe [ -f | -g ] [ relative path | model generation mode ]" << std::endl << 
-	"Optional Parameters:" << std::endl << " \t[ -n | normal size ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
-	std::endl << "\t[ -x | solver method (BiCGSTAB, ConjugateGradient or LeastSquaresConjugateGradient) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -p | print logs, 0 or 1 ]" << std::endl;
+	"Optional Parameters:" << std::endl << " \t[ -n | normal's size ]" << std::endl << " \t[ -z | Gaussian noise (between 0-0.025 recommended) ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
+	std::endl << "\t[ -x | solver method (Conjugate, Biconjugate or LeastSquares) ] " << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -t | Number Threads (default 8) ]" << std::endl << "\t[ -p | print logs (0 or 1) ]" << std::endl;
 }
 void readFlagArguments(const int &argc, char **argv)
 {
@@ -46,7 +51,7 @@ void readFlagArguments(const int &argc, char **argv)
 		printUsage();
 		abort();
 	}
-	while ((c = getopt (argc, argv, "ghf:n:r:a:s:x:i:p:")) != -1)
+	while ((c = getopt (argc, argv, "ghf:n:z:r:a:s:x:m:i:t:p:")) != -1)
 	{
 		switch (c)
 		{
@@ -65,6 +70,11 @@ void readFlagArguments(const int &argc, char **argv)
 			case 'n':
 				Normal_Size_ = stof(optarg);
 				break;
+
+			case 'z':
+				Gaussian_Noise_ = stof(optarg);
+				break;
+
 			case 'r':
 				Field_Resolution_ = stoi(optarg);
 				break;
@@ -80,15 +90,24 @@ void readFlagArguments(const int &argc, char **argv)
 				break;
 
 			case 'x':
-				if(optarg == "LeastSquaresConjugateGradient")
+				if(optarg == LEAST_SQUARES)
 					Solver_Method_ = Solver::LeastSquaresConjugateGradient;
 
-				else if(optarg == "ConjugateGradient")
+				else if(optarg == CONJUGATE)
 					Solver_Method_ = Solver::ConjugateGradient;
+				
+				break;
+
+			case 'm':
+				Multigrid_ = stoi(optarg);
 				break;
 
 			case 'i':
 				Multigrid_Iterations_ = stoi(optarg);
+				break;
+
+			case 't':
+				Num_Threads_ = stoi(optarg);
 				break;
 
 			case 'p':
@@ -102,6 +121,9 @@ void readFlagArguments(const int &argc, char **argv)
 				else if (optopt == 'n')
 					fprintf (stderr, "Option -n requires a float value as argument.\n");				
 				
+				else if (optopt == 'z')
+					fprintf (stderr, "Option -z requires a float value as argument.\n");	
+				
 				else if (optopt == 'r')
 					fprintf (stderr, "Option -r requires an integer value as argument.\n");	
 
@@ -110,9 +132,18 @@ void readFlagArguments(const int &argc, char **argv)
 
 				else if (optopt == 's')
 					fprintf (stderr, "Option -s requires a smoothing type as argument.\n");	
+				
+				else if (optopt == 'm')
+					fprintf (stderr, "Option -m requires a bool value as argument.\n");	
+
+				else if (optopt == 'i')
+					fprintf (stderr, "Option -i requires an integer value as argument.\n");	
+
+				else if (optopt == 't')
+					fprintf (stderr, "Option -t requires an integer value as argument.\n");	
 
 				else if (optopt == 'x')
-					fprintf (stderr, "Option -x requires a smoothing type as argument.\n");	
+					fprintf (stderr, "Option -x requires a solver type as argument.\n");	
 
 				else if (optopt == 'p')
 					fprintf (stderr, "Option -p requires a bool value as argument.\n");	
@@ -203,14 +234,14 @@ int main(int argc, char** argv) {
 		bool res = false;
 		if (type.compare("txt") == 0) 
 		{
-			res = data_representation::ReadFromTXT(file, mesh_.get());
+			res = data_representation::ReadFromTXT(file, mesh_.get(), Gaussian_Noise_);
 			Model_Generated_ = true;
 		}
 
 		else if (type.compare("svg") == 0)
 		{
 			res = data_representation::ReadFromSVG(file, mesh_.get());
-			std::cout << "[DATA] New file .txt generated, please run the script again with the new file" ;
+			std::cout << "[DATA] New file .txt generated, please run the script again with the new file" << std::endl;
 		}
 
 		else
@@ -243,10 +274,17 @@ int main(int argc, char** argv) {
 		//solver.computeBilaplacian(*mesh_.get(), field);
 		//solver.computeComponentWise(*mesh_.get(), field);
 		//solver.computeNoGradient(*mesh_.get(), field);
-		SolverData s = solver.computeWith(*mesh_.get(), field, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Print_Logs_);
-		//SolverData s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Print_Logs_);
+		SolverData s;		
+		if(Multigrid_)
+		{
+			s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+		}
+		else
+		{
+			s = solver.computeWith(*mesh_.get(), field, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+		}
 		std::cout.precision(5);
-		std::cout << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << NORMAL_STRING[Normal_Algorithm] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
+		std::cout << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << Gaussian_Noise_ <<  ", " << NORMAL_STRING[Normal_Algorithm] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << Multigrid_ << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
 
 		img = field.toImage(16.0f, 0.0f);
 		if(!img->savePNG(Relative_Out_Path_Name_))
@@ -258,7 +296,17 @@ int main(int argc, char** argv) {
 		delete img;
 		
 		Quadtree qtree;
-		qtree.compute(*mesh_.get(), 8, field);
+		qtree.compute(*mesh_.get(), 8, field, Normal_Algorithm, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+		
+		img = field.toImage(16.0f, 0.0f);
+		if(!img->savePNG("quatree_out.png"))
+		{
+			cout << "[ERROR] Could not save file!" << endl;
+			delete img;
+			return -1;
+		}
+		delete img;
+
 		Image qtreeImg;
 		qtreeImg.init(1024, 1024);
 		qtree.draw(qtreeImg);
@@ -268,7 +316,7 @@ int main(int argc, char** argv) {
 		//
 		glutInit(&argc, argv);
 		glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
-		glutInitWindowSize(100, 100);
+		glutInitWindowSize(1000, 1000);
 		glutInitWindowPosition(0, 0);
 		glutCreateWindow("Point Cloud Viewer");
 		//glutFullScreen();
@@ -278,9 +326,10 @@ int main(int argc, char** argv) {
 
 		// set the function to handle changes in screen size
 		//glutReshapeFunc(OnReshape);
-		std::string exePath = "./png_visualizer " + Relative_Out_Path_Name_ + " &";
+		std::string exePath = "./png_visualizer " + Relative_Out_Path_Name_ + " " + std::to_string(Field_Resolution_) + " " + std::to_string(Field_Resolution_) + " &";
 		int retCode = system(exePath.c_str());
-		int retCode_quadtree = system("./png_visualizer quadtree.png &");
+		std::string command = "./png_visualizer quadtree.png 1024 1024 &";
+		int retCode_quadtree = system(command.c_str());
 		// Properties Init
 		myinit();
 		glutMainLoop();

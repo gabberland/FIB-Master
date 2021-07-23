@@ -14,7 +14,7 @@ namespace data_representation {
  * @param mesh The resulting representation with computed per-vertex normals.
  * @return Whether it was able to read the file.
  */
-bool ReadFromTXT(const std::string &filename, Mesh *mesh);
+bool ReadFromTXT(const std::string &filename, Mesh *mesh, const float &noise);
 
 /**
  * @brief ReadFromSVG Read the mesh stored in SVG format at the path filename
