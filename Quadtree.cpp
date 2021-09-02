@@ -91,11 +91,11 @@ void QuadtreeNode::collectCorners(Quadtree *qtree, std::set<std::pair<int,int>> 
 		//No hauria de ser corner vec2 sino ivec2
 		corner = minNodeCorner;
 
-		std::cout << "CORNER FULLA: " << corner.x << " " << corner.y << std::endl;
+		//std::cout << "CORNER FULLA: " << corner.x << " " << corner.y << std::endl;
 
 		cornerIndex = qtree->pointToInteger(corner);
 
-		std::cout << "CORNER INDEX: " << cornerIndex << std::endl << std::endl;
+		//std::cout << "CORNER INDEX: " << cornerIndex << std::endl << std::endl;
 
 		it = qtree->cornerToUnknown.find(cornerIndex);
 		if(it == qtree->cornerToUnknown.end())
@@ -260,7 +260,7 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	}
 	cout << "[INFO] Gradient Eq Added" << endl;
 	std::set<std::pair<int, int>>::iterator it;
-	for(it = cornersArray.begin(); it != cornersArray.end(); ++it)
+	/*for(it = cornersArray.begin(); it != cornersArray.end(); ++it)
 	{
 		addHorizontalBoundarySmoothnessEquation(nEquations, glm::ivec2(it->first, it->second), triplets, bCoeffs);
 		nEquations++;
@@ -338,7 +338,7 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	for(unsigned int j=0, pos=0; j<field.height(); j++)
 		for(unsigned int i=0; i<field.width(); i++, pos++)
 			field(i, j) = x(pos);
-
+*/
 	//return outData;
 }
 

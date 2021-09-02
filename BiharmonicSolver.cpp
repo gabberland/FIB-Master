@@ -537,7 +537,7 @@ SolverData BiharmonicSolver::computeWith(const data_representation::Mesh &cloud,
 	unsigned int nEquations, nUnknowns;
 	SolverData outData;
 	
-	if(printLogs) cout << "[MESSAGE] Preparing the system with " << normal_type << " normal equations and " << smoothness_type << " smoothing equation ..." << endl;
+	if(printLogs) cout << "[MESSAGE] Preparing the system with " << NORMAL_STRING[normal_type] << " Normal equations and " << SMOOTHNESS_STRING[smoothness_type] << " Smoothing equations and " << SOLVER_STRING[solver_method] << "Solver ..." << endl;
 	long lastTime = getTimeMilliseconds();
 	
 	// Compute number of equations depending on the smoothing algorithm
@@ -675,7 +675,7 @@ SolverData BiharmonicSolver::computeMultigrid(const data_representation::Mesh &c
 
 		unsigned int nEquations, nUnknowns;
 		
-		if(printLogs) cout << "[MESSAGE] Preparing the system with " << normal_type << " normal equations and " << smoothness_type << " smoothing equation ..." << endl;
+		if(printLogs) cout << "[MESSAGE] Preparing the system with " << NORMAL_STRING[normal_type] << " Normal equations and " << SMOOTHNESS_STRING[smoothness_type] << " Smoothing equations and " << SOLVER_STRING[solver_method] << "Solver ..." << endl;
 		long lastTime = getTimeMilliseconds();
 		
 		if(smoothness_type == Smoothness::singleDimension)
@@ -740,7 +740,6 @@ SolverData BiharmonicSolver::computeMultigrid(const data_representation::Mesh &c
 		lastTime = getTimeMilliseconds();
 
 		int n = Eigen::nbThreads();
-		if(printLogs) std::cout << "[INFO] Initial number Threads: " << n << std::endl;
 
 		Eigen::initParallel();
 		omp_set_num_threads(numThreads);

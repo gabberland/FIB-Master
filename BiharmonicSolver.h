@@ -18,6 +18,14 @@ static const char* RESULT_STRING [] = {"No", "Yes"};
 
 struct SolverData
 {
+	int 		resolution;
+	float		gaussianNoise;
+	std::string normalAlgorithm;
+	std::string smoothingAlgorithm;
+	std::string solverMethod;
+	std::string isMultigrid;
+	int			multigridIterations;
+	int			numberThreads;
 	time_t 		systemBuildTime;
 	time_t 		matrixBuildTime = 0;
 	time_t 		solverResolutionTime;

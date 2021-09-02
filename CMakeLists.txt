@@ -57,7 +57,6 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-
 add_executable(${appName} ${imgui_files} ${gl3w_files} ${pugixml_files} main.cpp mesh.h mesh.cpp mesh_io.h mesh_io.cpp points_generator.h points_generator.cpp stb_image_write.h stb_image.h Image.cpp Image.h ScalarField.cpp ScalarField.h timing.h timing.cpp Quadtree.cpp Quadtree.h)
 
 target_link_libraries(${appName} ${OPENGL_LIBRARIES} ${GLUT_LIBRARIES})
