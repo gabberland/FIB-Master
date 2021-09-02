@@ -404,13 +404,27 @@ void computeMultipleReconstruction(int &argc, char** argv)
 	
 	std::vector<SolverData> solverOuts;
 
-	for(size_t isMultiIt = 0; isMultiIt < 2; ++isMultiIt)
+	int fixedMultiCond = 2;
+	int fixedNormalCond = 2;
+	int fixedSolverCond = 3;
+	int fixedSmoothCond = 2;
+
+	if(Fixed_Multigrid_Mode)
+		fixedMultiCond = 1;
+	if(Fixed_Normal_Algorithm)
+		fixedNormalCond = 1;
+	if(Fixed_Solver_Method)
+		fixedSolverCond = 1;
+	if(Fixed_Smoothness_Algorithm)
+		fixedSmoothCond = 1;
+
+	for(size_t isMultiIt = 0; isMultiIt < fixedMultiCond; ++isMultiIt)
 	{	
-		for(size_t normalAlgIt = 0; normalAlgIt < 2; ++normalAlgIt)
+		for(size_t normalAlgIt = 0; normalAlgIt < fixedNormalCond; ++normalAlgIt)
 		{
-			for(size_t solverAlgIt = 0; solverAlgIt < 3; ++solverAlgIt)
+			for(size_t solverAlgIt = 0; solverAlgIt < fixedSolverCond; ++solverAlgIt)
 			{
-				for(size_t smoothAlgIt = 0; smoothAlgIt < 2; ++smoothAlgIt)	
+				for(size_t smoothAlgIt = 0; smoothAlgIt < fixedSmoothCond; ++smoothAlgIt)	
 				{
 					for(float numberThreadsIt = Num_Threads_; numberThreadsIt > 1; numberThreadsIt/=2)
 					{					
@@ -419,11 +433,24 @@ void computeMultipleReconstruction(int &argc, char** argv)
 						Eigen::VectorXd guess;
 						Image *img;
 
-						
+						int multiIt = isMultiIt;
+						int normalIt = normalAlgIt;
+						int solverIt = solverAlgIt;
+						int smoothIt = smoothAlgIt;
+
+						if(Fixed_Multigrid_Mode)
+								multiIt = Multigrid_;
+						if(Fixed_Normal_Algorithm)
+							normalIt = Normal_Algorithm_;
+						if(Fixed_Solver_Method)
+							solverIt = Solver_Method_;
+						if(Fixed_Smoothness_Algorithm)
+							smoothIt = Smoothness_Algorithm_;
+
 						// Init & Set Weights
 						//
 
-						if(isMultiIt)	 
+						if(multiIt)	 
 							field.init((Field_Resolution_/(Multigrid_Iterations_+1)+1), Field_Resolution_/((Multigrid_Iterations_+1)+1));
 						else
 							field.init(Field_Resolution_, Field_Resolution_);
@@ -432,13 +459,13 @@ void computeMultipleReconstruction(int &argc, char** argv)
 						// Reconstruct
 						//
 						SolverData s;		
-						if(isMultiIt)
+						if(multiIt)
 						{
-							s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, normalAlgIt, smoothAlgIt, solverAlgIt, numberThreadsIt, Print_Logs_);
+							s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, normalIt, smoothIt, solverIt, numberThreadsIt, Print_Logs_);
 						}
 						else
 						{
-							s = solver.computeWith(*mesh_.get(), field, normalAlgIt, smoothAlgIt, solverAlgIt, numberThreadsIt, Print_Logs_);
+							s = solver.computeWith(*mesh_.get(), field, normalIt, smoothIt, solverIt, numberThreadsIt, Print_Logs_);
 						}
 
 						s.resolution = Field_Resolution_;
