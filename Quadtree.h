@@ -21,7 +21,7 @@ struct QuadtreeNode
 {
 	~QuadtreeNode();
 	
-	void subdivide(int levels);
+	void subdivide(int levels, const bool &fullGridSubdivision);
 	
 	bool isLeaf() const;
 	QuadtreeNode *pointToCell(const glm::vec2 &P);
@@ -47,7 +47,7 @@ public:
 	~Quadtree();
 	
 	void setWeights(double pointEqWeight, double gradientEqWeight, double smoothnessEqWeight);
-	void compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &printLogs);
+	void compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &fullGridSubdivision, const bool &printLogs);
 	
 	void draw(Image &image);
 	

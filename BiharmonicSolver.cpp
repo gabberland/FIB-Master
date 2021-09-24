@@ -639,7 +639,10 @@ SolverData BiharmonicSolver::computeWith(const data_representation::Mesh &cloud,
 	}
 	double relative_error = (A*x - b).norm() / b.norm();
 	if(printLogs) cout << "[DATA] The relative error is: " << relative_error << endl;
-		
+	
+	std::cout << "[DATA] Field Height: " << field.height() << " Field Width: " << field.width() << std::endl;
+	std::cout << "[DATA] Solver Rows : " << x.rows()  << std::endl;
+
 	for(unsigned int j=0, pos=0; j<field.height(); j++)
 		for(unsigned int i=0; i<field.width(); i++, pos++)
 			field(i, j) = x(pos);
@@ -761,6 +764,9 @@ SolverData BiharmonicSolver::computeMultigrid(const data_representation::Mesh &c
 		}
 		double relative_error = (A*x - b).norm() / b.norm();
 		if(printLogs) cout << "[DATA] The relative error is: " << relative_error << endl;
+
+		std::cout << "[DATA] Field Height: " << field.height() << " Field Width: " << field.width() << std::endl;
+		std::cout << "[DATA] Solver Rows : " << x.rows()  << std::endl;
 			
 		for(unsigned int j=0, pos=0; j<field.height(); j++)
 			for(unsigned int i=0; i<field.width(); i++, pos++)

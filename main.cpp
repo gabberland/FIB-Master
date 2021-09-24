@@ -38,17 +38,19 @@ bool				Fixed_Normal_Algorithm = 0;
 bool				Fixed_Smoothness_Algorithm = 0;
 bool 				Fixed_Solver_Method = 0;
 bool				Fixed_Multigrid_Mode = 0;
+bool				Multigrid_ = 0;
+bool				Print_Logs_ = 1;
+bool				Full_Grid_Subdivision = 0;
 Normal				Normal_Algorithm_ = Normal::sampling;
 Smoothness			Smoothness_Algorithm_ = Smoothness::singleDimension;
 Solver				Solver_Method_ = Solver::BiCGSTAB;
-bool				Multigrid_ = 0;
-bool				Print_Logs_ = 1;
+
 
 void printUsage()
 {
-	std::cout << "Usage: " << std::endl << "  reconstruction.exe [ -f | -g ] [ Single Analysis | Model Generation | In Depth Study ]" << std::endl << 
-	"Optional Parameters:" << std::endl <<  " \t[ -g | experiment mode (0 or 1) ]" << std::endl << " \t[ -n | normal's size ]" << std::endl << " \t[ -z | Gaussian noise (between 0-0.025 recommended) ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
-	std::endl << "\t[ -x | solver method (Conjugate, Biconjugate or LeastSquares) ] " << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -t | Number Threads (default 8) ]" << std::endl << "\t[ -p | print logs (0 or 1) ]" << std::endl;
+	std::cout << "Usage: " << std::endl << "  reconstruction.exe [ -f | -b ] [ Surface Reconstruction | Model Generation ]" << std::endl << 
+	"Optional Parameters:" << std::endl << " \t[ -n | normal's size ]" << std::endl << " \t[ -z | Gaussian noise (between 0-0.025 recommended) ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
+	std::endl << "\t[ -x | solver method (Conjugate, Biconjugate or LeastSquares) ] " << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -t | Number Threads (default 8) ]" << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -l | Quadtree Subdivision Levels (default 8) ]" << std::endl << "\t[ -g | Quadtree Full Grid Division (0 or 1) ]" << std::endl << "\t[ -p | print logs (0 or 1) ]" << std::endl << "\t[ -q | In Depth Study ]" << std::endl;
 }
 void readFlagArguments(const int &argc, char **argv)
 {
@@ -61,11 +63,11 @@ void readFlagArguments(const int &argc, char **argv)
 		printUsage();
 		abort();
 	}
-	while ((c = getopt (argc, argv, "ghf:n:z:r:a:s:x:m:i:l:t:p:q:")) != -1)
+	while ((c = getopt (argc, argv, "bhf:n:z:r:a:s:x:m:i:l:t:p:q:g:")) != -1)
 	{
 		switch (c)
 		{
-			case 'g':
+			case 'b':
 				Model_Generation_Mode_ = 1;
 				break;
 
@@ -132,6 +134,10 @@ void readFlagArguments(const int &argc, char **argv)
 				Num_Threads_ = stoi(optarg);
 				break;
 
+			case 'g':
+				Full_Grid_Subdivision = (bool)stoi(optarg);
+				break;
+
 			case 'p':
 				Print_Logs_ = stoi(optarg);
 				break;
@@ -172,6 +178,9 @@ void readFlagArguments(const int &argc, char **argv)
 
 				else if (optopt == 'p')
 					fprintf (stderr, "Option -p requires a bool value as argument.\n");	
+
+				else if (optopt == 'g')
+					fprintf (stderr, "Option -g requires a bool value as argument.\n");	
 
 				else if (isprint (optopt))
 					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -337,7 +346,7 @@ void computeSingleReconstruction(int &argc, char** argv)
 		//
 
 		Quadtree qtree;
-		qtree.compute(*mesh_.get(), QuadTree_Levels_, field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+		qtree.compute(*mesh_.get(), QuadTree_Levels_, field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Full_Grid_Subdivision, Print_Logs_);
 		
 		img = field.toImage(16.0f, 0.0f);
 		if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
@@ -524,7 +533,7 @@ void computeMultipleReconstruction(int &argc, char** argv)
 						//
 
 						Quadtree qtree;
-						qtree.compute(*mesh_.get(), QuadTree_Levels_, field, normalAlgIt, smoothAlgIt, solverAlgIt, numberThreadsIt, Print_Logs_);
+						qtree.compute(*mesh_.get(), QuadTree_Levels_, field, normalAlgIt, smoothAlgIt, solverAlgIt, numberThreadsIt, Full_Grid_Subdivision, Print_Logs_);
 						
 						img = field.toImage(16.0f, 0.0f);
 						if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
