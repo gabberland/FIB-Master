@@ -1,10 +1,14 @@
 #include <iostream>
 #include <set>
 #include "Quadtree.h"
-#include "BiharmonicSolver.h"
 #include "timing.h"
 
 
+QuadtreeNode::QuadtreeNode()
+{
+	for(unsigned int i=0; i<4; i++)
+		children[i] = NULL; 
+}
 QuadtreeNode::~QuadtreeNode()
 {
 	for(unsigned int i=0; i<4; i++)
@@ -57,7 +61,7 @@ void QuadtreeNode::subdivide(int levels, const bool &fullGridSubdivision)
 		children[3]->minNodeCorner = glm::vec2(newNodeCornerX, newNodeCornerY);
 		children[3]->maxNodeCorner = maxNodeCorner;
 
-		std::cout << "MAX NODE CORNER (" << maxNodeCorner.x << ", " << maxNodeCorner.y << ")" << std::endl; 
+		//std::cout << "MAX NODE CORNER (" << maxNodeCorner.x << ", " << maxNodeCorner.y << ")" << std::endl; 
 
 		for(unsigned int i=0; i<4; i++)
 			children[i]->subdivide(levels-1, fullGridSubdivision);
@@ -71,6 +75,8 @@ bool QuadtreeNode::isLeaf() const
 
 QuadtreeNode *QuadtreeNode::pointToCell(const glm::vec2 &P)
 {
+	assert(P.x >= minCoords.x && P.y >= minCoords.y && P.x <= maxCoords.x && P.y <= maxCoords.y);
+
 	if(isLeaf())
 		return this;
 	else
@@ -88,62 +94,72 @@ void QuadtreeNode::collectCorners(Quadtree *qtree, std::set<std::pair<int,int>> 
 	unsigned int cornerIndex;
 	map<int, int>:: iterator it;
 	
+	corner = maxNodeCorner;
+	//std::cout << "INTERCORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
+	//std::cout << (maxNodeCorner.x - minNodeCorner.x) << std::endl ;
+	//std::cout << (maxNodeCorner.y - minNodeCorner.y) << std::endl ;
+
 	if(isLeaf())
 	{
 		//No hauria de ser corner vec2 sino ivec2
 		corner = minNodeCorner;
 
-		cornerIndex = qtree->pointToInteger(corner);
+		cornerIndex = qtree->cornerToInteger(corner);
+		qtree->indexToCorner[cornerIndex] = corner;
 
-		it = qtree->cornerToUnknown.find(cornerIndex);
-		if(it == qtree->cornerToUnknown.end())
+		it = qtree->cornerIndexToUnknown.find(cornerIndex);
+		if(it == qtree->cornerIndexToUnknown.end())
 		{
-			qtree->cornerToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->cornerIndexToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->unknownToCornerIndex[qtree->nUnknowns] = cornerIndex;
 			cornersArray.insert(std::pair<int,int>(corner.x, corner.y));
-			std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
+			//std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
 			cornerUnknowns[0] = qtree->nUnknowns++;
 		}
 		else
-			cornerUnknowns[0] = qtree->cornerToUnknown[cornerIndex];
+			cornerUnknowns[0] = qtree->cornerIndexToUnknown[cornerIndex];
 
-		corner = glm::vec2(maxCoords.x, minCoords.y);
-		cornerIndex = qtree->pointToInteger(corner);
-		it = qtree->cornerToUnknown.find(cornerIndex);
-		if(it == qtree->cornerToUnknown.end())
+		corner = glm::vec2(maxNodeCorner.x, minNodeCorner.y);
+		cornerIndex = qtree->cornerToInteger(corner);
+		it = qtree->cornerIndexToUnknown.find(cornerIndex);
+		if(it == qtree->cornerIndexToUnknown.end())
 		{
-			qtree->cornerToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->cornerIndexToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->unknownToCornerIndex[qtree->nUnknowns] = cornerIndex;
 			cornersArray.insert(std::pair<int,int>(corner.x, corner.y));
-			std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
+			//std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
 			cornerUnknowns[1] = qtree->nUnknowns++;
 		}
 		else
-			cornerUnknowns[1] = qtree->cornerToUnknown[cornerIndex];
+			cornerUnknowns[1] = qtree->cornerIndexToUnknown[cornerIndex];
 
-		corner = glm::vec2(minCoords.x, maxCoords.y);
-		cornerIndex = qtree->pointToInteger(corner);
-		it = qtree->cornerToUnknown.find(cornerIndex);
-		if(it == qtree->cornerToUnknown.end())
+		corner = glm::vec2(minNodeCorner.x, maxNodeCorner.y);
+		cornerIndex = qtree->cornerToInteger(corner);
+		it = qtree->cornerIndexToUnknown.find(cornerIndex);
+		if(it == qtree->cornerIndexToUnknown.end())
 		{
-			qtree->cornerToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->cornerIndexToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->unknownToCornerIndex[qtree->nUnknowns] = cornerIndex;
 			cornersArray.insert(std::pair<int,int>(corner.x, corner.y));
-			std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
+			//std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
 			cornerUnknowns[2] = qtree->nUnknowns++;
 		}
 		else
-			cornerUnknowns[2] = qtree->cornerToUnknown[cornerIndex];
+			cornerUnknowns[2] = qtree->cornerIndexToUnknown[cornerIndex];
 
-		corner = maxCoords;
-		cornerIndex = qtree->pointToInteger(corner);
-		it = qtree->cornerToUnknown.find(cornerIndex);
-		if(it == qtree->cornerToUnknown.end())
+		corner = maxNodeCorner;
+		cornerIndex = qtree->cornerToInteger(corner);
+		it = qtree->cornerIndexToUnknown.find(cornerIndex);
+		if(it == qtree->cornerIndexToUnknown.end())
 		{
-			qtree->cornerToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->cornerIndexToUnknown[cornerIndex] = qtree->nUnknowns;
+			qtree->unknownToCornerIndex[qtree->nUnknowns] = cornerIndex;
 			cornersArray.insert(std::pair<int,int>(corner.x, corner.y));
-			std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
+			//std::cout << "CORNER INSERTED: (" << corner.x << ", " << corner.y << ")" << std::endl;
 			cornerUnknowns[3] = qtree->nUnknowns++;
 		}
 		else
-			cornerUnknowns[3] = qtree->cornerToUnknown[cornerIndex];
+			cornerUnknowns[3] = qtree->cornerIndexToUnknown[cornerIndex];
 	}
 	else
 	{
@@ -174,7 +190,6 @@ void QuadtreeNode::draw(Image &image) const
 	}
 }
 
-
 Quadtree::Quadtree()
 {
 	root = NULL;
@@ -195,8 +210,10 @@ void Quadtree::setWeights(double pointEqWeight, double gradientEqWeight, double 
 	sW = smoothnessEqWeight;
 }
 
-void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &fullGridSubdivision, const bool &printLogs)
+SolverData Quadtree::compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &fullGridSubdivision, const bool &printLogs)
 {
+    if(printLogs) cout << "[MESSAGE] Preparing the system with " << NORMAL_STRING[normal_type] << " Normal equations and " << SMOOTHNESS_STRING[smoothness_type] << " Smoothing equations and " << SOLVER_STRING[solver_method] << "Solver ..." << endl;
+        
 	SolverData outData;
 	nUnknowns = 0;
 	nLevels = levels;
@@ -255,13 +272,26 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 		nEquations++;
 	}
 	cout << "[INFO] Point Eq Added" << endl;
-	for(unsigned int i=0; i<cloudSize; i++)
-	{
-		addGradientEquations(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), 
-							glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs);
-		nEquations += 2;
-	}
-	cout << "[INFO] Gradient Eq Added" << endl;
+    if (normal_type == Normal::gradient)
+    {
+        for(unsigned int i=0; i<cloudSize; i++)
+        {
+            addGradientEquations(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), 
+                                glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs);
+            nEquations += 2;
+        }
+    }
+    if (normal_type == Normal::sampling)
+    {
+        for(unsigned int i=0; i<cloudSize; i++)
+        {
+            addPointEquation(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) + (1.0f /  (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, 1.0f);
+            nEquations++;
+            addPointEquation(nEquations, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) - (1.0f / (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, -1.0f);
+            nEquations++;
+        }
+    }
+	cout << "[INFO] Normal Eq Added" << endl;
 	std::set<std::pair<int, int>>::iterator it;
 	for(it = cornersArray.begin(); it != cornersArray.end(); ++it)
 	{
@@ -279,8 +309,9 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	
 	cout << "[INFO] Vertical Eq Added" << endl;
 
-	cout << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
-	
+	cout << "[INFO]" << nEquations << " equations and " << nUnknowns << " unknowns" << endl;
+	//std::cout << "CORNER INDEX NUMBER: " << cornerIndexToUnknown.size() << std::endl;
+
 	Eigen::SparseMatrix<double> A(nEquations, nUnknowns), AtA;
 	Eigen::VectorXd b(nEquations), Atb, x;
 
@@ -288,23 +319,23 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	for(unsigned int i=0; i<bCoeffs.size(); i++)
 		b(i) = bCoeffs[i];
 
-	cout << "Building A & b in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+	time_t sysTime = getTimeMilliseconds() - lastTime;
+	outData.systemBuildTime = sysTime;
 
-	cout << "Computing normal equation" << endl;
-	lastTime = getTimeMilliseconds();
-	
-	AtA = A.transpose() * A;
-	Atb = A.transpose() * b;
-	
-	cout << "Computed AtA & Atb in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+	cout << "[INFO] Building A & b in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
 
-	cout << "Solving least squares" << endl;
+	cout << "[MESSAGE] Computing normal equation" << endl;
 	lastTime = getTimeMilliseconds();
 	
 	// Compute transposed matrices
 	//
 	AtA = A.transpose() * A;
 	Atb = A.transpose() * b;
+	
+	cout << "[INFO] Computed AtA & Atb in " << (getTimeMilliseconds() - lastTime) << " ms" << endl;
+
+	cout << "[INFO] Solving least squares.." << endl;
+	//lastTime = getTimeMilliseconds();
 	
 	time_t buildTime = getTimeMilliseconds() - lastTime;
 	if(solver_method == Solver::LeastSquaresConjugateGradient)
@@ -343,10 +374,75 @@ void Quadtree::compute(const data_representation::Mesh &cloud, unsigned int leve
 	std::cout << "[DATA] Field Height: " << field.height() << " Field Width: " << field.width() << std::endl;
 	std::cout << "[DATA] Solver Rows : " << x.rows()  << std::endl;
 
-	for(unsigned int j=0, pos=0; j<field.height(); j++)
-		for(unsigned int i=0; i<field.width(); i++, pos++)
-			field(i, j) = x(pos);
-	//return outData;
+	//NO ES RECORRE PER FILES!
+
+	if(fullGridSubdivision)
+	{
+		for(size_t pos = 0; pos < x.size(); ++pos)
+		{
+			int cornerIndex = unknownToCornerIndex[pos];		
+			glm::vec2 corner = indexToCorner[cornerIndex];
+
+			field(corner.x, corner.y) = x(pos);
+		}
+	}
+	
+	//cas que no sigui full sibdivision:
+	else
+	{
+		fillField(root, field, x);
+	}
+	return outData;
+
+}
+
+//- Recorrer totes les fulles del quadtree:
+		//- Saps 4 corners:
+			// - obtens valors dels index de cada corner del vector x
+			// - per tota la fulla interpolar els 4 valors del pas anterior
+				// - Fer un cas general, no intentar fer per casos en particular
+void Quadtree::fillField(QuadtreeNode *node, ScalarField &field, const Eigen::VectorXd &x)
+{
+	if(node->isLeaf())
+	{
+		int cornerIndexBottomLeft  = cornerToInteger(node->minNodeCorner);
+		int cornerIndexTopRight    = cornerToInteger(node->maxNodeCorner);		
+		int cornerIndexTopLeft     = cornerToInteger(glm::vec2(node->minNodeCorner.x, node->maxNodeCorner.y));
+		int cornerIndexBottomRight = cornerToInteger(glm::vec2(node->maxNodeCorner.x, node->minNodeCorner.y));
+
+		int unknownBottomLeft  = cornerIndexToUnknown[cornerIndexBottomLeft];
+		int unknownTopRight    = cornerIndexToUnknown[cornerIndexTopRight];
+		int unknownTopLeft     = cornerIndexToUnknown[cornerIndexTopLeft];
+		int unknownBottomRight = cornerIndexToUnknown[cornerIndexBottomRight];
+
+		float value_bottom_left = x(unknownBottomLeft);
+		float value_bottom_right = x(unknownBottomRight);
+		float value_top_left = x(unknownTopLeft);
+		float value_top_right = x(unknownTopRight);
+
+		glm::ivec2 texel;
+		glm::vec2 node_coords;
+		for(texel.y = node->minNodeCorner.y; texel.y <= node->maxNodeCorner.y; texel.y++)
+		{
+			for(texel.x = node->minNodeCorner.x; texel.x <= node->maxNodeCorner.x; texel.x++)
+			{
+				node_coords.x = (float)(texel.x - node->minNodeCorner.x)/(node->maxNodeCorner.x - node->minNodeCorner.x);
+				node_coords.y = (float)(texel.y - node->minNodeCorner.y)/(node->maxNodeCorner.y - node->minNodeCorner.y);
+
+				field(texel.x, texel.y) = (1-node_coords.x)*(1-node_coords.y)*value_bottom_left + 
+						node_coords.x*(1-node_coords.y)*value_bottom_right +
+						(1 - node_coords.x)*node_coords.y*value_top_left +
+						node_coords.x*node_coords.y*value_top_right;												
+			}
+		}
+		//Doble bucle recorrer totes les posicions iterant desde min.x a max.x i min.y a max.y
+		//Ens dius la posicio on es troba
+	}
+	else
+	{
+		for(unsigned int i=0; i<4; i++)
+			fillField(node->children[i], field, x);
+	}
 }
 
 void Quadtree::draw(Image &image)
@@ -356,7 +452,7 @@ void Quadtree::draw(Image &image)
 	image.fill(glm::vec3(0.0f, 0.0f, 0.0f));
 	root->draw(image);
 	
-	for(map<int, int>::iterator it=cornerToUnknown.begin(); it!=cornerToUnknown.end(); it++)
+	for(map<int, int>::iterator it=cornerIndexToUnknown.begin(); it!=cornerIndexToUnknown.end(); it++)
 	{
 		int cornerIndex = it->first;
 		float y = float(cornerIndex / ((1 << nLevels) + 1)) / (1 << nLevels);
@@ -382,6 +478,15 @@ unsigned int Quadtree::pointToInteger(const glm::vec2 &P) const
 	return (unsigned int)round((1 << nLevels) * P.y) * ((1 << nLevels) + 1) + (unsigned int)round((1 << nLevels) * P.x);
 }
 
+//NOU CORNER TO INTEGER
+unsigned int Quadtree::cornerToInteger(const glm::ivec2 &C) const
+{
+	return C.y * ((1 << nLevels) + 1) + C.x;
+}
+
+//NOU INTEGER TO CORNER
+
+
 unsigned int Quadtree::nodeToInteger(const glm::ivec2 &P) const
 {
 	return (((1 << nLevels)+1) * P.y) + P.x;
@@ -390,49 +495,69 @@ unsigned int Quadtree::nodeToInteger(const glm::ivec2 &P) const
 
 void Quadtree::addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value)
 {
+	unsigned int i, j;
 	QuadtreeNode *node;
 	float x, y;
 	
 	node = pointToCell(P);
-	x = (P.x - node->minCoords.x) / (node->maxCoords.x - node->minCoords.x);
-	y = (P.y - node->minCoords.y) / (node->maxCoords.y - node->minCoords.y);
+
+	unsigned int fieldSize = std::pow(2, nLevels)+1;
+
+	i = (unsigned int)floor(P.x * (fieldSize - 1));
+	i = std::max(0u, glm::min(i, fieldSize-2));
+	j = (unsigned int)floor(P.y * (fieldSize - 1));
+	j = glm::max(0u, glm::min(j, fieldSize - 2));
+	
+	x = P.x * (fieldSize - 1) - float(i);
+	y = P.y * (fieldSize - 1) - float(j);
+	
+	//std::cout << "QUAD FIELD EQ I: " << node->minNodeCorner.x << " J: " << node->minNodeCorner.y << std::endl;
+	//std::cout << "QUAD POINT EQ I: " << i << " J: " << j << std::endl;
+	//std::cout << "QUAD POINT EQ X: " << x << " Y: " << y << std::endl << std::endl;
+
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[3], pW*x*y));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[2], pW*(1.0f-x)*y));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[1], pW*x*(1.0f-y)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[0], pW*(1.0f-x)*(1.0f-y)));
+	
 	bCoeffs.push_back(value);
 }
 
 void Quadtree::addGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs)
 {
-	QuadtreeNode *node;
 	unsigned int i, j;
+	QuadtreeNode *node;
 	float x, y;
 	
 	node = pointToCell(P);
-	uint nodeWidth  = node->maxCoords.x - node->minCoords.x;
-	uint nodeHeight = node->maxCoords.y - node->minCoords.y;
-	i = (unsigned int)floor(P.x * (nodeWidth - 1));
-	i = glm::max(0u, glm::min(i, nodeWidth-2));
-	j = (unsigned int)floor(P.y * (nodeHeight - 1));
-	j = glm::max(0u, glm::min(j, nodeHeight-2));
+
+	unsigned int fieldSize = std::pow(2, nLevels)+1;
+
+	i = (unsigned int)floor(P.x * (fieldSize - 1));
+	i = std::max(0u, glm::min(i, fieldSize-2));
+	j = (unsigned int)floor(P.y * (fieldSize - 1));
+	j = glm::max(0u, glm::min(j, fieldSize - 2));
 	
-	x = P.x * (nodeWidth - 1) - float(i);
-	y = P.y * (nodeHeight - 1) - float(j);
+	x = P.x * (fieldSize - 1) - float(i);
+	y = P.y * (fieldSize - 1) - float(j);
 	
+	//std::cout << "QUAD FIELD    EQ I: " << node->minNodeCorner.x << " J: " << node->minNodeCorner.y << std::endl;
+	//std::cout << "QUAD GRADIENT EQ I: " << i << " J: " << j << std::endl;
+	//std::cout << "QUAD GRADIENT EQ X: " << x << " Y: " << y << std::endl << std::endl;
+
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[3], gW*y));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[2], -gW*y));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[1], gW*(1.0f-y)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex, node->cornerUnknowns[0], -gW*(1.0f-y)));
 	
-	bCoeffs.push_back(gW*N.x);
+	bCoeffs.push_back( gW* 64 / (fieldSize-1)*N.x);
 
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[3], gW*x));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[2], gW*(1.0f-x)));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[1], -gW*x));
 	triplets.push_back(Eigen::Triplet<double>(eqIndex+1, node->cornerUnknowns[0], -gW*(1.0f-x)));
 	
-	bCoeffs.push_back(gW*N.y);
+	bCoeffs.push_back(gW* 64 / (fieldSize-1) * N.y);
 }
 void Quadtree::addSamplingEquations(const data_representation::Mesh &cloud, unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs)
 {
@@ -441,8 +566,7 @@ void Quadtree::addSamplingEquations(const data_representation::Mesh &cloud, unsi
 		QuadtreeNode *node = pointToCell(P);
 		uint nodeWidth  = node->maxCoords.x - node->minCoords.x;
 		uint nodeHeight = node->maxCoords.y - node->minCoords.y;
-		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()), triplets, bCoeffs);
-		eqIndex++;
+
 		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) + (1.0f /  (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, 1.0f);
 		eqIndex++;
 		addPointEquation(eqIndex, glm::vec2(cloud.vertices_[i].x(), cloud.vertices_[i].y()) - (1.0f / (1 << nLevels)) * glm::vec2(cloud.normals_[i].x(), cloud.normals_[i].y()), triplets, bCoeffs, -1.0f);
@@ -451,53 +575,106 @@ void Quadtree::addSamplingEquations(const data_representation::Mesh &cloud, unsi
 }
 
 int Quadtree::addHorizontalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::ivec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value)
-{
-	
+{	
 	glm::ivec2 left = P;
 	--left.x;
 
 	glm::ivec2 right = P;
 	++right.x;
 
-	std::cout << "LOOKING FOR POINT P(" << P.x << ", " << P.y << ")-> " << "NEIGHBORS RIGHT: (" << right.x << ", " << P.y << ")  LEFT: (" << left.x << ", " << P.y << ")... ";
+	//std::cout << "LOOKING FOR POINT P(" << P.x << ", " << P.y << ")-> " << "NEIGHBORS RIGHT: (" << right.x << ", " << P.y << ")  LEFT: (" << left.x << ", " << P.y << ")... ";
 
 	if(right.x <= pow(2, nLevels) && left.x >= 0)
-	{
-		//Check if exists right & left neighbor nodes
+	{		
+		std::map<int, float> myMap;
+
+		// First add the point itself
 		//
-		std::map<int, int>::iterator it_right = cornerToUnknown.find(pointToInteger(right));
-		std::map<int, int>::iterator it_left = cornerToUnknown.find(pointToInteger(left));
+		accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(P)], -2.0f);
 
-		
-		if(it_right != cornerToUnknown.end() && it_left != cornerToUnknown.end())
+		// Check if exists right & left neighbor nodes
+		//
+		std::map<int, int>::iterator it_right = cornerIndexToUnknown.find(cornerToInteger(right));
+		std::map<int, int>::iterator it_left = cornerIndexToUnknown.find(cornerToInteger(left));
+
+		// Case right
+		//
+		if(it_right != cornerIndexToUnknown.end())
 		{
-			std::cout << "\tFOUND" << std::endl;
-
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(P)], -sW*2.0f));
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(right)], sW*1.0f));
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(left)], sW*1.0f));
+			accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(right)], 1.0f);
 		}
 
+		// Case no right
+		//
 		else
 		{
-			std::cout << "\tNOT FOUND: ";
-			if(it_right == cornerToUnknown.end())
-			{
-				std::cout << "RIGHT ";
-			}
-			if(it_left == cornerToUnknown.end())
-			{
-				std::cout << "LEFT";
-			}
-			std::cout << std::endl;
+			// Get the point cell
+			glm::vec2 normalized_right = glm::vec2(right.x/(pow(2, nLevels)+1), right.y/(pow(2, nLevels)+1));
+			//std::cout << "NO RIGHT FOUND (" << normalized_right.x << ", " << normalized_right.y << ")" << std::endl;
+			QuadtreeNode *point_cell = pointToCell(normalized_right);
+			glm::vec2 top_left     = point_cell->minCoords;
+			glm::vec2 bottom_right = point_cell->maxCoords;
+			
+			// v(x0, y0) = top-left coner (min-max)
+			// v(x1, y1) = bottom-right corner (max-min)
+			// v(x', y') = ((x-x0)/(x1,x0), (y-y0)/(y1-y0))
+			
+			float x = (normalized_right.x-top_left.x)/(bottom_right.x - top_left.x);
+			float y = (normalized_right.y-top_left.y)/(bottom_right.y - top_left.y);
+
+			//std::cout << "NO RIGHT FOUND (" << normalized_right.x << ", " << normalized_right.y << ").. NODE TOP LEFT (" << top_left.x << ", " << top_left.y << ") NODE BOTTOM RIGHT (" << bottom_right.x << ", " << bottom_right.y << ").. X = " <<  x << " Y = " << y << std::endl;
+
+			// v(x, y) = (1-y')*(1-x')*v00 + (1-y')*x'*v10 + y'*(1-x')*v01 + y'*x'*v11			
+			accumulateToMap(myMap, point_cell->cornerUnknowns[0], (1-y)*(1-x)); //top-left v00
+			accumulateToMap(myMap, point_cell->cornerUnknowns[1], (1-y)*x);	 	//top-right v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[2], y*(1-x)); 	//bottom-left v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[3], y*x); 		//bottom-right v11
 		}
 		
+		// Case left
+		//
+		if(it_left != cornerIndexToUnknown.end())
+		{
+			accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(left)], 1.0f);
+		}
+
+		// Case no left
+		//
+		else
+		{
+			// Get the point cell
+			glm::vec2 normalized_left = glm::vec2(left.x/(pow(2, nLevels)+1), left.y/(pow(2, nLevels)+1));
+			QuadtreeNode *point_cell = pointToCell(normalized_left);
+			glm::vec2 top_left     = point_cell->minCoords;
+			glm::vec2 bottom_right = point_cell->maxCoords;
+			
+			// v(x0, y0) = top-left coner (min-max)
+			// v(x1, y1) = bottom-right corner (max-min)
+			// v(x', y') = ((x-x0)/(x1,x0), (y-y0)/(y1-y0))
+
+			float x = (normalized_left.x-top_left.x)/(bottom_right.x - top_left.x);
+			float y = (normalized_left.y-top_left.y)/(bottom_right.y - top_left.y);
+
+			// v(x, y) = (1-y')*(1-x')*v00 + (1-y')*x'*v10 + y'*(1-x')*v01 + y'*x'*v11			
+			accumulateToMap(myMap, point_cell->cornerUnknowns[0], (1-y)*(1-x)); // v00
+			accumulateToMap(myMap, point_cell->cornerUnknowns[1], (1-y)*x);	 	// v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[2], y*(1-x)); 	// v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[3], y*x); 		// v11
+		}
+
+		// Read all map and add Eq
+		//
+		for(std::map<int, float>::iterator it = myMap.begin(); it != myMap.end(); it++)
+		{
+			triplets.push_back(Eigen::Triplet<double>(eqIndex, it->first, sW * it->second));
+		}
+
 		bCoeffs.push_back(0.0f);
 		return 1;
 	}
 	else 
 	{
-		std::cout << "\tONE OF THE NEIGHBORS IS OUT OF BOUNDS" << std::endl;
+		//std::cout << "\tONE OF THE NEIGHBORS IS OUT OF BOUNDS" << std::endl;
 		return 0;
 	}
 	std::cout << endl;
@@ -512,45 +689,109 @@ int Quadtree::addVerticalBoundarySmoothnessEquation(unsigned int eqIndex, const 
 	glm::ivec2 top = P;
 	++top.y;
 
-	std::cout << "LOOKING FOR POINT P(" << P.x << ", " << P.y << ")-> " << "NEIGHBORS TOP: (" << P.x << ", " << top.y << ")  BOTTOM: (" << P.x << ", " << bottom.y << ")... ";
+	//std::cout << "LOOKING FOR POINT P(" << P.x << ", " << P.y << ")-> " << "NEIGHBORS TOP: (" << P.x << ", " << top.y << ")  BOTTOM: (" << P.x << ", " << bottom.y << ")... ";
 
 	if(top.y <= pow(2, nLevels) && bottom.y >= 0)
 	{
-		//Check if exists top & bottom neighbor nodes
+		std::map<int, float> myMap;
+
+		// First add the point itself
 		//
-		std::map<int, int>::iterator it_top = cornerToUnknown.find(pointToInteger(top));
-		std::map<int, int>::iterator it_bottom = cornerToUnknown.find(pointToInteger(bottom));
+		accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(P)], -2.0f);
 
-		if (it_top != cornerToUnknown.end() && it_bottom != cornerToUnknown.end())
+		// Check if exists right & left neighbor nodes
+		//
+		std::map<int, int>::iterator it_top = cornerIndexToUnknown.find(cornerToInteger(top));
+		std::map<int, int>::iterator it_bottom = cornerIndexToUnknown.find(cornerToInteger(bottom));
+
+		// Case right
+		//
+		if(it_top != cornerIndexToUnknown.end())
 		{
-			std::cout << "\tFOUND!" << std::endl;
-
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(P)], -sW*2.0f));
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(top)], sW*1.0f));
-			triplets.push_back(Eigen::Triplet<double>(eqIndex, cornerToUnknown[pointToInteger(bottom)], sW*1.0f));
+			accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(top)], 1.0f);
 		}
-		
+
+		// Case no right
+		//
 		else
 		{
-			std::cout << "\tNOT FOUND: ";
-			if(it_top == cornerToUnknown.end())
-			{
-				std::cout << "TOP ";
-			}
-			if(it_bottom == cornerToUnknown.end())
-			{
-				std::cout << "BOTTOM";
-			}
-			std::cout << std::endl;		}
+			// Get the point cell
+			glm::vec2 normalized_top = glm::vec2(top.x/(pow(2, nLevels)+1), top.y/(pow(2, nLevels)+1));
+			QuadtreeNode *point_cell = pointToCell(normalized_top);
+			glm::vec2 top_left     = point_cell->minCoords;
+			glm::vec2 bottom_right = point_cell->maxCoords;
+			
+			// v(x0, y0) = top-left coner (min-max)
+			// v(x1, y1) = bottom-right corner (max-min)
+			// v(x', y') = ((x-x0)/(x1,x0), (y-y0)/(y1-y0))
+
+			float x = (normalized_top.x-top_left.x)/(bottom_right.x - top_left.x);
+			float y = (normalized_top.y-top_left.y)/(bottom_right.y - top_left.y);
+
+			// v(x, y) = (1-y')*(1-x')*v00 + (1-y')*x'*v10 + y'*(1-x')*v01 + y'*x'*v11			
+			accumulateToMap(myMap, point_cell->cornerUnknowns[0], (1-y)*(1-x)); //top-left v00
+			accumulateToMap(myMap, point_cell->cornerUnknowns[1], (1-y)*x);	 	//top-right v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[2], y*(1-x)); 	//bottom-left v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[3], y*x); 		//bottom-right v11
+		}
+		
+		// Case bottom
+		//
+		if(it_bottom != cornerIndexToUnknown.end())
+		{
+			accumulateToMap(myMap, cornerIndexToUnknown[cornerToInteger(bottom)], 1.0f);
+		}
+
+		// Case no bottom
+		//
+		else
+		{
+			// Get the point cell
+			glm::vec2 normalized_bottom = glm::vec2(bottom.x/(pow(2, nLevels)+1), bottom.y/(pow(2, nLevels)+1));
+			QuadtreeNode *point_cell = pointToCell(normalized_bottom);
+			glm::vec2 top_left     = point_cell->minCoords;
+			glm::vec2 bottom_right = point_cell->maxCoords;
+			
+			// v(x0, y0) = top-left coner (min-max)
+			// v(x1, y1) = bottom-right corner (max-min)
+			// v(x', y') = ((x-x0)/(x1,x0), (y-y0)/(y1-y0))
+			float x = (normalized_bottom.x-top_left.x)/(bottom_right.x - top_left.x);
+			float y = (normalized_bottom.y-top_left.y)/(bottom_right.y - top_left.y);
+
+			// v(x, y) = (1-y')*(1-x')*v00 + (1-y')*x'*v10 + y'*(1-x')*v01 + y'*x'*v11			
+			accumulateToMap(myMap, point_cell->cornerUnknowns[0], (1-y)*(1-x)); //top-left v00
+			accumulateToMap(myMap, point_cell->cornerUnknowns[1], (1-y)*x);	 	//top-right v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[2], y*(1-x)); 	//bottom-left v10
+			accumulateToMap(myMap, point_cell->cornerUnknowns[3], y*x); 		//bottom-right v11
+		}
+
+		// Read all map and add Eq
+		//
+		for(std::map<int, float>::iterator it = myMap.begin(); it != myMap.end(); it++)
+		{
+			triplets.push_back(Eigen::Triplet<double>(eqIndex, it->first, sW * it->second));
+		}
 
 		bCoeffs.push_back(0.0f);
 		return 1;
 	}
 	else 
 	{
-		std::cout << "\tONE OF THE NEIGHBORS IS OUT OF BOUNDS" << std::endl;
+		//std::cout << "\tONE OF THE NEIGHBORS IS OUT OF BOUNDS" << std::endl;
 		return 0;
 	}
 
 	std::cout << endl;
+}
+
+void Quadtree::accumulateToMap(std::map<int, float> &map, const int &key, const float &value)
+{
+	if(map.find(key) == map.end())
+	{
+		map[key] = value;
+	}
+	else
+	{
+		map[key] += value;
+	}
 }

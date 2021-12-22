@@ -40,10 +40,6 @@ public:
 	BiharmonicSolver();
 
 	void setWeights(double pointEqWeight, double gradientEqWeight, double smoothnessEqWeight);
-	void compute(const data_representation::Mesh &cloud, ScalarField &field);
-	void computeComponentWise(const data_representation::Mesh &cloud, ScalarField &field);
-	void computeBilaplacian(const data_representation::Mesh &cloud, ScalarField &field);
-	void computeNoGradient(const data_representation::Mesh &cloud, ScalarField &field);
 	SolverData computeWith(const data_representation::Mesh &cloud, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &printLogs);
 	SolverData computeMultigrid(const data_representation::Mesh &cloud, ScalarField &field, int iterations, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &printLogs);
 
@@ -53,6 +49,7 @@ public:
 
 private:
 	void addPointEquation(unsigned int eqIndex, const glm::vec2 &P, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b, float value = 0.0f);
+	void addGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b);
 	void addPointAndGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, const ScalarField &field, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b);
 	void addSmoothnessEquation(unsigned int eqIndex, const ScalarField &field, unsigned int i, unsigned int j, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b);
 	void addBilaplacianSmoothnessEquation(unsigned int eqIndex, const ScalarField &field, unsigned int i, unsigned int j, vector<Eigen::Triplet<double>> &triplets, Eigen::VectorXd &b);

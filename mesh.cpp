@@ -49,12 +49,21 @@ void Mesh::writeTxtFile(const std::string &filename)
 
 void Mesh::normalizePointValues()
 {
-  float max = std::max(max_[0], max_[1]);
+/*
+  //Compute Bounding Box Center
+  float bboxX = (max_.x() - min_.x());
+  float bboxY = (max_.y() - min_.y());
+  
+  //Compute Longest edge in order to make it  squared
+  float longestEdge = std::max(max_.x() - min_.x(), max_.y() - min_.y() );
 
+  float max = std::max(max_[0], max_[1]);
+  float offset = std::abs(max_[0]-max_[1]);
+*/
   for(size_t i = 0; i < vertices_.size(); ++i)
   {
-    vertices_[i].x() = (float)(vertices_[i].x() * 0.8f / max + 0.1);
-    vertices_[i].y() = (float)(vertices_[i].y() * 0.8f / max + 0.1);
+    vertices_[i].x() = (float)(vertices_[i].x() * 0.8f / max_[0] + 0.1);
+    vertices_[i].y() = (float)(vertices_[i].y() * 0.8f / max_[1] + 0.1);
   }
 }
 

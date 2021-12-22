@@ -5,7 +5,7 @@ cmake_policy(SET CMP0015 NEW)
 set (CMAKE_CXX_STANDARD 14)
 
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_BUILD_TYPE Debug)
 endif()
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
@@ -32,16 +32,19 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules" ${CMAKE_MODULE_PATH})
 find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(GLM REQUIRED)
+#find_package(FreeImage REQUIRED)
 
 include_directories(${OPENGL_INCLUDE_DIRS})
 include_directories(${GLUT_INCLUDE_DIRS})
 include_directories(${GLM_INCLUDE_DIRS})
+include_directories(${FREEIMAGE_INCLUDE_DIRS})
 include_directories("${CMAKE_SOURCE_DIR}/gl3w")
 include_directories("${CMAKE_SOURCE_DIR}/eigen")
 include_directories("${CMAKE_SOURCE_DIR}/pugixml")
 
 link_directories(${OPENGL_LIBRARY_DIRS})
 link_directories(${GLUT_LIBRARY_DIRS})
+link_directories(${FREEIMAGE_LIBRARY_DIRS})
 
 link_libraries(dl)
 
@@ -59,4 +62,4 @@ endif()
 
 add_executable(${appName} ${imgui_files} ${gl3w_files} ${pugixml_files} main.cpp mesh.h mesh.cpp mesh_io.h mesh_io.cpp points_generator.h points_generator.cpp stb_image_write.h stb_image.h Image.cpp Image.h ScalarField.cpp ScalarField.h timing.h timing.cpp Quadtree.cpp Quadtree.h)
 
-target_link_libraries(${appName} ${OPENGL_LIBRARIES} ${GLUT_LIBRARIES})
+target_link_libraries(${appName} ${OPENGL_LIBRARIES} ${GLUT_LIBRARIES} ${FREEIMAGE_LIBRARIES})

@@ -2,7 +2,7 @@
 #include "points_generator.h"
 
 #include "pugixml.hpp"
-
+#include "stdlib.h"
 #include <assert.h>
 #include <algorithm>
 #include <fstream>
@@ -17,6 +17,41 @@ namespace data_representation {
 void AddItems(float i1, float i2, size_t index, std::vector<Eigen::Vector2f> *vector) 
 {
   (*vector)[index] = Eigen::Vector2f(i1, i2);
+}
+
+Coordinate2d readCoordinate(std::vector<std::string> array, const int &i)
+{
+  std::stringstream ss (array[i]);
+  std::string token;
+  
+  std::getline(ss, token, ',');
+  
+  float vx = std::stof(token);
+  std::getline(ss, token, ',');
+  float vy = std::stof(token);
+  return Coordinate2d(vx,vy);
+}
+
+Coordinate2d readHorizontalCoordinate(std::vector<std::string> array, const int &i)
+{
+  std::stringstream ss (array[i]);
+  std::string token;
+  
+  std::getline(ss, token, ',');
+  
+  float vx = std::stof(token);
+  return Coordinate2d(vx,0);
+}
+
+Coordinate2d readVerticalCoordinate(std::vector<std::string> array, const int &i)
+{
+  std::stringstream ss (array[i]);
+  std::string token;
+  
+  std::getline(ss, token, ',');
+
+  float vy = std::stof(token);
+  return Coordinate2d(0,vy);
 }
 
 bool ReadTxtHeader(std::ifstream *fin, int &vertices) 
@@ -59,6 +94,53 @@ void ReadTxtVertices(std::ifstream *fin, Mesh *mesh)
     nx = std::stof(array[2]);
     ny = std::stof(array[3]);
     AddItems(nx, ny, i, &(mesh->normals_));
+  }
+}
+
+void ReadTxtVerticesWithDensity(std::ifstream *fin, Mesh *mesh, const float& density) 
+{
+  char line[100];
+  const size_t kVertices = mesh->vertices_.size();
+  mesh->vertices_.clear();
+  mesh->normals_.clear();
+
+  int spacing = 0;
+  for (size_t i = 0; i < kVertices; ++i) {    
+
+    fin->getline(line, 100);
+    if(spacing <= 0)
+    {
+      int rand = std::rand() % 100;
+      if(rand > density)
+      {
+        spacing = std::rand() % (int)(density*0.1) + (int)(density*0.05);
+      }
+    }
+    if(spacing <= 0)
+    {
+      std::string s = line;
+      boost::char_separator<char> sep(" ");
+      boost::tokenizer<boost::char_separator<char>> tokens(s, sep);
+      std::vector<std::string> array;
+      for (const auto& t : tokens)
+      {
+          array.push_back(t);
+      }
+
+      float vx, vy, nx, ny;
+
+      vx = std::stof(array[0]);
+      vy = std::stof(array[1]);
+      mesh->vertices_.push_back(Eigen::Vector2f(vx, vy));
+
+      nx = std::stof(array[2]);
+      ny = std::stof(array[3]);
+      mesh->normals_.push_back(Eigen::Vector2f(nx, ny));
+    }
+    else
+    {
+      --spacing;
+    }    
   }
 }
 
@@ -114,7 +196,7 @@ std::vector<data_representation::Coordinate2d> ComputeVertexNormals(const std::v
   return r;
 }
 
-bool ReadFromTXT(const std::string &filename, Mesh *mesh, const float &noise) 
+bool ReadFromTXT(const std::string &filename, Mesh *mesh, const float &noise, const float &density) 
 {
     std::ifstream fin;
 
@@ -130,7 +212,7 @@ bool ReadFromTXT(const std::string &filename, Mesh *mesh, const float &noise)
     mesh->vertices_.resize(static_cast<size_t>(vertices));
     mesh->normals_.resize(static_cast<size_t>(vertices));
 
-    ReadTxtVertices(&fin, mesh);
+    ReadTxtVerticesWithDensity(&fin, mesh, density);
 
     fin.close();
     mesh->addNoise(0, noise);
@@ -167,15 +249,17 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
         std::vector<data_representation::Coordinate2d> normals;
         Coordinate2d currPathPoint = Coordinate2d(-1,-1);
         size_t i = 0;
-        while (i < array.size())
+        while (i < array.size() && array[i] != "z" && array[i] != "Z")
         {
-            if (array[i] == "M")
+            if (array[i] == "M" || array[i] == "L")
             {
               ++i;
 
-              while (array[i] != "M" && array[i] != "m" && array[i] != "l" && i < array.size())
+              while (array[i] != "M" && array[i] != "L" && array[i] != "m" && array[i] != "l" && array[i] != "z" && array[i] != "Z" && array[i] != "v" && array[i] != "V" && array[i] != "h" && array[i] != "H" && i < array.size())
               {
-                Coordinate2d coord = readCoordinate(array, i);
+                Coordinate2d coord;
+                
+                coord = readCoordinate(array, i);
 
                 vertices.push_back(coord);
 
@@ -192,7 +276,7 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
             {
               ++i;
               
-              while (array[i] != "M" && array[i] != "m" && array[i] != "l" && i < array.size())
+              while (array[i] != "M" && array[i] != "m" && array[i] != "L" && array[i] != "l" && array[i] != "z" && array[i] != "Z" && array[i] != "v" && array[i] != "V" && array[i] != "h" && array[i] != "H" && i < array.size())
               {
                 Coordinate2d coord = readCoordinate(array, i);
                 Coordinate2d newcoord = Coordinate2d(currPathPoint[0]+coord[0],currPathPoint[1]+coord[1]);
@@ -206,6 +290,39 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
               }             
             }
 
+            else if(array[i] == "v" || array[i] != "V")
+            {
+              while (array[i] != "M" && array[i] != "m" && array[i] != "L" && array[i] != "l" && array[i] != "z" && array[i] != "Z" && array[i] != "v" && array[i] != "V" && array[i] != "h" && array[i] != "H" && i < array.size())
+              {
+                Coordinate2d coord = readVerticalCoordinate(array, i);
+                Coordinate2d newcoord = Coordinate2d(currPathPoint[0]+coord[0],currPathPoint[1]+coord[1]);
+                vertices.push_back(newcoord);
+                currPathPoint = newcoord;
+                
+                ++i;
+
+                std::cout << "ADDED " << coord << std::endl;
+
+              }  
+            }
+            else if(array[i] == "h" || array[i] != "H")
+            {
+              while (array[i] != "M" && array[i] != "m" && array[i] != "L" && array[i] != "l" && array[i] != "z" && array[i] != "Z" && array[i] != "v" && array[i] != "V" && array[i] != "h" && array[i] != "H" && i < array.size())
+              {
+                Coordinate2d coord = readHorizontalCoordinate(array, i);
+                Coordinate2d newcoord = Coordinate2d(currPathPoint[0]+coord[0],currPathPoint[1]+coord[1]);
+                vertices.push_back(newcoord);
+                currPathPoint = newcoord;
+                
+                ++i;
+
+                std::cout << "ADDED " << coord << std::endl;
+              }
+            }  
+            else if(array[i] == "z" || array[i] == "Z")
+            {
+              break;
+            }
         }
 
       normals = GiveVertexNormals(vertices);
@@ -222,17 +339,6 @@ bool ReadFromSVG(const std::string &filepathName, Mesh *mesh)
     return true;
 }
 
-Coordinate2d readCoordinate(std::vector<std::string> array, const int &i)
-{
-  std::stringstream ss (array[i]);
-  std::string token;
-  
-  std::getline(ss, token, ',');
-  
-  float vx = std::stof(token);
-  std::getline(ss, token, ',');
-  float vy = std::stof(token);
-  return Coordinate2d(vx,vy);
-}
+
 
 }  // namespace data_representation

@@ -10,6 +10,7 @@
 #include <Eigen/IterativeLinearSolvers>
 #include "ScalarField.h"
 #include "mesh.h"
+#include "BiharmonicSolver.h"
 
 using namespace std;
 
@@ -19,6 +20,8 @@ class Quadtree;
 
 struct QuadtreeNode
 {
+	QuadtreeNode();
+
 	~QuadtreeNode();
 	
 	void subdivide(int levels, const bool &fullGridSubdivision);
@@ -47,14 +50,18 @@ public:
 	~Quadtree();
 	
 	void setWeights(double pointEqWeight, double gradientEqWeight, double smoothnessEqWeight);
-	void compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &fullGridSubdivision, const bool &printLogs);
+	SolverData compute(const data_representation::Mesh &cloud, unsigned int levels, ScalarField &field, const int &normal_type, const int &smoothness_type, const int &solver_method, const int &numThreads, const bool &fullGridSubdivision, const bool &printLogs);
 	
 	void draw(Image &image);
 	
+	void fillField(QuadtreeNode *node, ScalarField &field, const Eigen::VectorXd &x);
+
 private:
 	QuadtreeNode *pointToCell(const glm::vec2 &P);
 	unsigned int pointToInteger(const glm::vec2 &P) const;
 	unsigned int nodeToInteger(const glm::ivec2 &P) const;
+	unsigned int cornerToInteger(const glm::ivec2 &C) const;
+
 
 	void addPointEquation(unsigned int eqIndex, const glm::vec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0f);
 	void addGradientEquations(unsigned int eqIndex, const glm::vec2 &P, const glm::vec2 &N, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs);
@@ -62,11 +69,14 @@ private:
 	int addHorizontalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::ivec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0f);
     int addVerticalBoundarySmoothnessEquation(unsigned int eqIndex, const glm::ivec2 &P, vector<Eigen::Triplet<double>> &triplets, vector<float> &bCoeffs, const float &value = 0.0);
 
-private:
+	void accumulateToMap(std::map<int, float> &map, const int &key, const float &value);
+
 	unsigned int nLevels, nUnknowns;
 	QuadtreeNode *root;
 	// Maps unique corner id to unknown id in the linear system
-	map<int, int> cornerToUnknown;
+	map<int, int> cornerIndexToUnknown;
+	map<int, int> unknownToCornerIndex;
+	map<int, glm::vec2> indexToCorner;
 
 	double pW, gW, sW;
 	
@@ -77,3 +87,5 @@ private:
 #endif
 
 
+// Quan vagi a posar dins de quadtree per cada punt s'ha d mirar requadre voltant del punt
+// Punt nomes es posa on node on relament esta pero si es crean subdivisions

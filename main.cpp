@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
 #include "stb_image_write.h"
+#include "FreeImage.h"
 
 #include "mesh_io.h"
 #include "points_generator.h"
@@ -17,31 +18,36 @@
 std::shared_ptr<data_representation::Mesh> mesh_;
 
 static const int 	PIXEL_MARGINS = 1;
-static const string GRADIENT = "gradient";
+static const string SAMPLING = "sampling";
 static const string SMOOTHNESS = "2D";
 static const string LEAST_SQUARES = "LeastSquares";
 static const string CONJUGATE = "Conjugate";
 
-int					Field_Resolution_ = 64;
+int					Field_Resolution_ = 65;
 int					Multigrid_Iterations_ = 1;
-int					Num_Threads_ = 8;
-int					QuadTree_Levels_ = 8;
+int					Num_Threads_ = 24;
+int					QuadTree_Levels_ = 6;
 float 				Normal_Size_ = .2;
 float 				Gaussian_Noise_ = 0;
+float 				Sampling_Density = 100;
+float				Biharmonic_Transfer_Max_Value = 8.0f;
+float				Quadtree_Transfer_Max_Value = 0.1f;
 string				Relative_Out_Path_Name_ = "out.png";
 string				Relative_Quadtree_Out_Path_Name_;
 string 				Relative_In_Path_Name_;
-bool				Model_Generation_Mode_ = 0;
-bool 				Model_Generated_ = 0;
+string 				Which_Method_Execute_ = "Both";
 bool 				Experimentation_Mode_ = 0;
 bool				Fixed_Normal_Algorithm = 0;
 bool				Fixed_Smoothness_Algorithm = 0;
 bool 				Fixed_Solver_Method = 0;
 bool				Fixed_Multigrid_Mode = 0;
+bool				Fixed_Num_Threads = 0;
+bool				Full_Grid_Subdivision = 0;
+bool				Model_Generation_Mode_ = 0;
+bool 				Model_Generated_ = 0;
 bool				Multigrid_ = 0;
 bool				Print_Logs_ = 1;
-bool				Full_Grid_Subdivision = 0;
-Normal				Normal_Algorithm_ = Normal::sampling;
+Normal				Normal_Algorithm_ = Normal::gradient;
 Smoothness			Smoothness_Algorithm_ = Smoothness::singleDimension;
 Solver				Solver_Method_ = Solver::BiCGSTAB;
 
@@ -49,8 +55,8 @@ Solver				Solver_Method_ = Solver::BiCGSTAB;
 void printUsage()
 {
 	std::cout << "Usage: " << std::endl << "  reconstruction.exe [ -f | -b ] [ Surface Reconstruction | Model Generation ]" << std::endl << 
-	"Optional Parameters:" << std::endl << " \t[ -n | normal's size ]" << std::endl << " \t[ -z | Gaussian noise (between 0-0.025 recommended) ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
-	std::endl << "\t[ -x | solver method (Conjugate, Biconjugate or LeastSquares) ] " << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -t | Number Threads (default 8) ]" << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -l | Quadtree Subdivision Levels (default 8) ]" << std::endl << "\t[ -g | Quadtree Full Grid Division (0 or 1) ]" << std::endl << "\t[ -p | print logs (0 or 1) ]" << std::endl << "\t[ -q | In Depth Study ]" << std::endl;
+	"Optional Parameters:" << std::endl << " \t[ -c | Which Methods will Execute (Biharmonic, Quadtree or Both) ]" << std::endl << " \t[ -n | normal's size ]" << std::endl << " \t[ -z | Gaussian noise (between 0-0.025 recommended) ]" << std::endl << " \t[ -d | Sampling Density (between 0-100 %) ]" << std::endl << "\t[ -r | resolution ]" << std::endl << "\t[ -a | normal algorithm (gradient or sampling) ]" << std::endl << "\t[ -s | smoothing algorithm (1D or 2D) ]" << 
+	std::endl << "\t[ -x | solver method (Conjugate, Biconjugate or LeastSquares) ] " << std::endl << "\t[ -m | Multigrid Solving  Mode on (0 or 1) ] " << std::endl << "\t[ -i | Multigrid Iterations ] " << std::endl << "\t[ -t | Number Threads (default 8) ]"  << std::endl << "\t[ -l | Quadtree Subdivision Levels (default 8) ]" << std::endl << "\t[ -g | Quadtree Full Grid Division (0 or 1) ]" << std::endl << "\t[ -p | print logs (0 or 1) ]" << std::endl << "\t[ -q | In Depth Study ]" << std::endl << "\t[ -y | Color Transfer Max Value ]" << std::endl;
 }
 void readFlagArguments(const int &argc, char **argv)
 {
@@ -63,8 +69,11 @@ void readFlagArguments(const int &argc, char **argv)
 		printUsage();
 		abort();
 	}
-	while ((c = getopt (argc, argv, "bhf:n:z:r:a:s:x:m:i:l:t:p:q:g:")) != -1)
+	while ((c = getopt (argc, argv, "bhf:n:z:d:r:a:s:x:m:i:l:t:p:q:g:y:c:")) != -1)
 	{
+		std::string buf;                 // Have a buffer string
+		std::stringstream ss(optarg);    // Insert the string into a stream
+		std::vector<std::string> tokens; // Create vector to hold our words
 		switch (c)
 		{
 			case 'b':
@@ -82,7 +91,15 @@ void readFlagArguments(const int &argc, char **argv)
 			case 'f':
 				Relative_In_Path_Name_ = optarg;
 				break;
-			
+
+			case 'd':
+				Sampling_Density = stof(optarg);
+				break;
+
+			case 'c':
+				Which_Method_Execute_ = optarg;
+				break;
+
 			case 'n':
 				Normal_Size_ = stof(optarg);
 				break;
@@ -97,8 +114,8 @@ void readFlagArguments(const int &argc, char **argv)
 
 			case 'a':
 				Fixed_Normal_Algorithm = true;
-				if (GRADIENT == optarg)
-					Normal_Algorithm_ = Normal::gradient;
+				if (SAMPLING == optarg)
+					Normal_Algorithm_ = Normal::sampling;
 				break;
 
 			case 's':
@@ -131,6 +148,7 @@ void readFlagArguments(const int &argc, char **argv)
 				break;
 
 			case 't':
+                Fixed_Num_Threads = true;
 				Num_Threads_ = stoi(optarg);
 				break;
 
@@ -142,12 +160,31 @@ void readFlagArguments(const int &argc, char **argv)
 				Print_Logs_ = stoi(optarg);
 				break;
 
+    			while(std::getline(ss, buf, ' '))
+				{
+				tokens.push_back(buf);
+				}
+				if(tokens.size() == 1)
+				{
+					Biharmonic_Transfer_Max_Value = stoi(tokens[0]);
+					Quadtree_Transfer_Max_Value = stoi(tokens[0]);
+				}
+				else if(tokens.size() == 2)
+				{
+					Biharmonic_Transfer_Max_Value = stoi(tokens[0]);
+					Quadtree_Transfer_Max_Value = stoi(tokens[1]);
+				}
+				break;
+			
 			case '?':
 				if (optopt == 'f')
 					fprintf (stderr, "Option -f requires a filepath as argument.\n");
 				
 				else if (optopt == 'n')
 					fprintf (stderr, "Option -n requires a float value as argument.\n");				
+				
+				else if (optopt == 'd')
+					fprintf (stderr, "Option -d requires a float value as argument.\n");				
 				
 				else if (optopt == 'z')
 					fprintf (stderr, "Option -z requires a float value as argument.\n");	
@@ -211,7 +248,7 @@ void display() {
 	
 	for(size_t i = 0; i < mesh_->vertices_.size();  ++i)
 	{
-			glVertex2f( 1 - mesh_->vertices_[i][0], 1 - mesh_->vertices_[i][1]);
+			glVertex2f(mesh_->vertices_[i][0], 1 - mesh_->vertices_[i][1]);
 	}
 	glEnd();
 
@@ -219,9 +256,9 @@ void display() {
 	glBegin(GL_LINES);
 	for(size_t i = 0; i < mesh_->normals_.size();  ++i)
 	{
-			glVertex2f(1- mesh_->vertices_[i][0], 1- mesh_->vertices_[i][1]);
+			glVertex2f(mesh_->vertices_[i][0],1- mesh_->vertices_[i][1]);
 
-			glVertex2f(1 - mesh_->vertices_[i][0] - (Normal_Size_ *mesh_->normals_[i][0]), 1 - mesh_->vertices_[i][1] - (Normal_Size_ * mesh_->normals_[i][1]));
+			glVertex2f(mesh_->vertices_[i][0] + (Normal_Size_ *mesh_->normals_[i][0]), 1 - mesh_->vertices_[i][1] - (Normal_Size_ * mesh_->normals_[i][1]));
 	}
 	glEnd();
 
@@ -282,19 +319,6 @@ void computeSingleReconstruction(int &argc, char** argv)
 		field.init(Field_Resolution_, Field_Resolution_);
 		solver.setWeights(1.0f, 1.0f, 1.0f);
 
-		// Reconstruct
-		//
-		SolverData s;		
-		if(Multigrid_)
-		{
-			s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
-		}
-		else
-		{
-			s = solver.computeWith(*mesh_.get(), field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
-		}
-		// Create & Manage Directory Hierarchy
-		//
 		std::vector<std::string> results;
 		std::vector<std::string> endResults;
 		boost::algorithm::split(results, Relative_In_Path_Name_, boost::is_any_of("/"));
@@ -308,61 +332,101 @@ void computeSingleReconstruction(int &argc, char** argv)
 		system(subDirCommand.c_str());
 		Relative_Quadtree_Out_Path_Name_ = subDirName + "/quadtree-" + Relative_Out_Path_Name_;
 		Relative_Out_Path_Name_ = subDirName + "/" + Relative_Out_Path_Name_;
-		img = field.toImage(16.0f, 0.0f);
 
-		// Save PNG Image
-		if(!img->savePNG(Relative_Out_Path_Name_))
-		{
-			cout << "[ERROR] Could not save file!" << endl;
-			delete img;
-			return;
-		}
-		delete img;
-
-		// Save Text Reports
 		ofstream myReport;
 		std::string strReport = subDirName + "/report.txt";
+		SolverData s;		
+
+		// Save Text Reports
 		myReport.open (strReport);
 		myReport << std::string(204, '-') << std::endl;
-		myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(5) << "Noise" <<  "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
+		myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
 		myReport << std::string(204, '-') << std::endl;
-		time_t totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
-		myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << Field_Resolution_ << "|" << setw(5) << Gaussian_Noise_ <<  "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << SMOOTHNESS_STRING[Smoothness_Algorithm_] << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << RESULT_STRING[Multigrid_] << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
-		myReport << std::string(204, '-') << std::endl;
-		myReport.close();
 
 		ofstream excel;
 		std::string strExcel = subDirName + "/report.csv";
 		excel.open(strExcel);
-		excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Noise" <<  ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << ", " << "Iterations" << ", " << "Error" << std::endl;
-		std::cout.precision(5);
-		excel << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << Gaussian_Noise_ <<  ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << totalTime << ", " << s.iterations << ", " << s.error << std::endl;
-		excel.close();
+		excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << ", " << "Iterations" << ", " << "Error" << std::endl;
 
-		std::cout.precision(5);
-		std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << Gaussian_Noise_ <<  ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
+		// Reconstruct
+		//
+		if(Which_Method_Execute_ != "Quadtree")
+		{
+			if(Multigrid_)
+			{
+				s = solver.computeMultigrid(*mesh_.get(), field, Multigrid_Iterations_, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+			}
+			else
+			{
+				s = solver.computeWith(*mesh_.get(), field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Print_Logs_);
+			}
+			// Create & Manage Directory Hierarchy
+			//
+
+			img = field.toImage(Biharmonic_Transfer_Max_Value, 0.0f);
+
+			// Save PNG Image
+			if(!img->savePNG(Relative_Out_Path_Name_))
+			{
+				cout << "[ERROR] Could not save file!" << endl;
+				delete img;
+				return;
+			}
+			delete img;
+            
+			time_t totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
+			myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << Field_Resolution_ << "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << SMOOTHNESS_STRING[Smoothness_Algorithm_] << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << RESULT_STRING[Multigrid_] << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
+			myReport << std::string(204, '-') << std::endl;
+
+			std::cout.precision(5);
+			excel << Relative_In_Path_Name_ << ", " << Field_Resolution_ << ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << totalTime << ", " << s.iterations << ", " << s.error << std::endl;
+
+            std::cout.precision(5);
+            std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << Field_Resolution_ <<  ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
+            
+        }
 		
+
 		// Now Compute the Quadree Solution
 		//
-
-		Quadtree qtree;
-		qtree.compute(*mesh_.get(), QuadTree_Levels_, field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Full_Grid_Subdivision, Print_Logs_);
-		
-		img = field.toImage(16.0f, 0.0f);
-		if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
-		{
-			cout << "[ERROR] Could not save file!" << endl;
-			delete img;
-			return;
-		}
-		delete img;
-
-		Image qtreeImg;
-		qtreeImg.init(1024, 1024);
-		qtree.draw(qtreeImg);
 		std::string strQuadtree = subDirName + "/quadtree.png";
-		qtreeImg.savePNG(strQuadtree);
-		
+		if(Which_Method_Execute_ != "Biharmonic")
+		{
+			Quadtree qtree;
+			s = qtree.compute(*mesh_.get(), QuadTree_Levels_, field, Normal_Algorithm_, Smoothness_Algorithm_, Solver_Method_, Num_Threads_, Full_Grid_Subdivision, Print_Logs_);
+			
+			//std::cout << "-------------------> " << Quadtree_Transfer_Max_Value << std::endl;
+			img = field.toImage(1, 0.0f);
+			if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
+			{
+				cout << "[ERROR] Could not save file!" << endl;
+				delete img;
+				return;
+			}
+			delete img;
+
+			Image qtreeImg;
+			qtreeImg.init(1024, 1024);
+			qtree.draw(qtreeImg);
+			qtreeImg.savePNG(strQuadtree);
+            
+            int quadtree_resolution = pow(2,QuadTree_Levels_)+1;
+
+			time_t totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
+			myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << quadtree_resolution << "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << "1D" << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << " --- " << "|" << setw(16) << " --- " << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
+			myReport << std::string(204, '-') << std::endl;
+
+			std::cout.precision(5);
+			excel << Relative_In_Path_Name_ << ", " << quadtree_resolution << ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << totalTime << ", " << s.iterations << ", " << s.error << std::endl;
+            
+            std::cout.precision(5);
+            std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << quadtree_resolution <<  ", " << NORMAL_STRING[Normal_Algorithm_] << ", " << SMOOTHNESS_STRING[Smoothness_Algorithm_] << ", " << SOLVER_STRING[Solver_Method_] << ", " << RESULT_STRING[Multigrid_] << ", " << Multigrid_Iterations_ << ", " << Num_Threads_ << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " <<s.matrixBuildTime << ", " <<s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
+            
+		}
+
+		myReport.close();
+		excel.close();
+
 		// Initialize Viewer
 		//
 		glutInit(&argc, argv);
@@ -379,6 +443,9 @@ void computeSingleReconstruction(int &argc, char** argv)
 		//glutReshapeFunc(OnReshape);
 		std::string exePath = "./png_visualizer " + Relative_Out_Path_Name_ + " " + std::to_string(Field_Resolution_) + " " + std::to_string(Field_Resolution_) + " &";
 		int retCode = system(exePath.c_str());
+	    exePath = "./png_visualizer " + Relative_Quadtree_Out_Path_Name_ + " " + std::to_string(std::pow(2,QuadTree_Levels_)+1) + " " + std::to_string(std::pow(2,QuadTree_Levels_)+1) + " &";
+		retCode = system(exePath.c_str());
+
 		std::string command = "./png_visualizer " + strQuadtree + " 1024 1024 &";
 		int retCode_quadtree = system(command.c_str());
 
@@ -386,6 +453,16 @@ void computeSingleReconstruction(int &argc, char** argv)
 		std::string strScreenshot = subDirName + "/screenshot.png";
 		takeScreenshot(strScreenshot.c_str());
 
+		// Save render to image
+		BYTE* pixels = new BYTE[3*Field_Resolution_*Field_Resolution_];
+		glReadPixels(0,0, Field_Resolution_, Field_Resolution_, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+		int saved = stbi_write_png(strScreenshot.c_str(), Field_Resolution_, Field_Resolution_, 3, pixels, 0);
+
+   	    free(pixels);
+/*		FIBITMAP* image = FreeImage_ConvertFromRawBits(pixels, Field_Resolution_, Field_Resolution_, 3*Field_Resolution_, 24, 0x0000FF, 0xFF0000, 0x00FF00, false);
+		FreeImage_Save(FIF_BMP, image, "/home/oriol", 0);
+		FreeImage_Unload(image);
+*/
 		// Properties Init
 		myinit();
 		glutMainLoop();
@@ -393,7 +470,7 @@ void computeSingleReconstruction(int &argc, char** argv)
 		system(kill.c_str());
 }
 
-void computeMultipleReconstruction(int &argc, char** argv)
+void computeMultipleReconstructionBiharmonic(int &argc, char** argv)
 {
 	// Create & Manage Directory Hierarchy
 	//
@@ -413,29 +490,15 @@ void computeMultipleReconstruction(int &argc, char** argv)
 	
 	std::vector<SolverData> solverOuts;
 
-	int fixedMultiCond = 2;
-	int fixedNormalCond = 2;
-	int fixedSolverCond = 3;
-	int fixedSmoothCond = 2;
-
-	if(Fixed_Multigrid_Mode)
-		fixedMultiCond = 1;
-	if(Fixed_Normal_Algorithm)
-		fixedNormalCond = 1;
-	if(Fixed_Solver_Method)
-		fixedSolverCond = 1;
-	if(Fixed_Smoothness_Algorithm)
-		fixedSmoothCond = 1;
-
-	for(size_t isMultiIt = 0; isMultiIt < fixedMultiCond; ++isMultiIt)
+	for(size_t isMultiIt = Multigrid_; isMultiIt < 2; ++isMultiIt)
 	{	
-		for(size_t normalAlgIt = 0; normalAlgIt < fixedNormalCond; ++normalAlgIt)
+		for(size_t normalAlgIt = Normal_Algorithm_; normalAlgIt < 2; ++normalAlgIt)
 		{
-			for(size_t solverAlgIt = 0; solverAlgIt < fixedSolverCond; ++solverAlgIt)
+			for(size_t solverAlgIt = Solver_Method_; solverAlgIt < 3; ++solverAlgIt)
 			{
-				for(size_t smoothAlgIt = 0; smoothAlgIt < fixedSmoothCond; ++smoothAlgIt)	
+				for(size_t smoothAlgIt = Smoothness_Algorithm_; smoothAlgIt < 2; ++smoothAlgIt)	
 				{
-					for(float numberThreadsIt = Num_Threads_; numberThreadsIt > 1; numberThreadsIt/=2)
+					for(float numberThreadsIt = Num_Threads_; numberThreadsIt >= 1; numberThreadsIt-=2)
 					{					
 						ScalarField field;
 						BiharmonicSolver solver;
@@ -495,7 +558,7 @@ void computeMultipleReconstruction(int &argc, char** argv)
 						system(subDirCommand.c_str());
 						Relative_Quadtree_Out_Path_Name_ = subDirName + "/quadtree-" + Relative_Out_Path_Name_;
 						std::string relative_Out_Path_Name = subDirName + "/" + Relative_Out_Path_Name_;
-						img = field.toImage(16.0f, 0.0f);
+						img = field.toImage(Biharmonic_Transfer_Max_Value, 0.0f);
 
 						// Save PNG Image
 						if(!img->savePNG(relative_Out_Path_Name))
@@ -511,81 +574,70 @@ void computeMultipleReconstruction(int &argc, char** argv)
 						std::string strReport = subDirName + "/report.txt";
 						myReport.open (strReport);
 						myReport << std::string(204, '-') << std::endl;
-						myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(5) << "Noise" <<  "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
+						myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
 						myReport << std::string(204, '-') << std::endl;
 						time_t totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
-						myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << Field_Resolution_ << "|" << setw(5) << Gaussian_Noise_ <<  "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << SMOOTHNESS_STRING[Smoothness_Algorithm_] << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << RESULT_STRING[Multigrid_] << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
+						myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << Field_Resolution_ << "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << SMOOTHNESS_STRING[Smoothness_Algorithm_] << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << RESULT_STRING[Multigrid_] << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
 						myReport << std::string(204, '-') << std::endl;
 						myReport.close();
 
 						ofstream excel;
 						std::string strExcel = subDirName + "/report.csv";
 						excel.open(strExcel);
-						excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Noise" <<  ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << " ," << "Iterations" << ", " << "Error" << std::endl;
+						excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << " ," << "Iterations" << ", " << "Error" << std::endl;
 						std::cout.precision(5);
-						excel << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.gaussianNoise <<  ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << totalTime << s.iterations << ", " << s.error << std::endl;
+						excel << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << totalTime << s.iterations << ", " << s.error << std::endl;
 						excel.close();
 
 						std::cout.precision(5);
-						std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.gaussianNoise <<  ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
-
-						// Now Compute the Quadree Solution
-						//
-
-						Quadtree qtree;
-						qtree.compute(*mesh_.get(), QuadTree_Levels_, field, normalAlgIt, smoothAlgIt, solverAlgIt, numberThreadsIt, Full_Grid_Subdivision, Print_Logs_);
-						
-						img = field.toImage(16.0f, 0.0f);
-						if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
-						{
-							cout << "[ERROR] Could not save file!" << endl;
-							delete img;
-							return;
-						}
-						delete img;
-
-						Image qtreeImg;
-						qtreeImg.init(1024, 1024);
-						qtree.draw(qtreeImg);
-						std::string strQuadtree = subDirName + "/quadtree.png";
-						qtreeImg.savePNG(strQuadtree);
-
-						std::cout << endl;
+						std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;
 
 						solverOuts.push_back(s);
+                        
+                        if(Fixed_Num_Threads)
+                            break;
 					}
+					if(Fixed_Smoothness_Algorithm)
+                        break;
 				}
+				if(Fixed_Solver_Method)
+                    break;
 			}
+			if(Fixed_Normal_Algorithm)
+                break;
 		}
+		if(Fixed_Multigrid_Mode)
+            break;
 	}
-			// Save Text Reports
+		// Save Text Reports
 		ofstream myReport;
-		std::string strReport = directoryName + "/report.txt";
+		std::string strReport = directoryName + "/Biharmonic_report.txt";
 		myReport.open (strReport);
 
 		ofstream excel;
-		std::string strExcel = directoryName + "/report.csv";
+		std::string strExcel = directoryName + "/Biharmonic_report.csv";
 		excel.open(strExcel);
 
 		myReport << std::string(204, '-') << std::endl;
-		myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(5) << "Noise" <<  "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
+		myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
 
-		excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Noise" <<  ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << ", " << "Iterations" << ", " << "Error" << std::endl;
+		excel << "Relative In Path Name" << ", " << "Resolution" <<  ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << ", " << "Iterations" << ", " << "Error" << std::endl;
 		std::cout.precision(5);
 
 		SolverData bestCombi;
 		bestCombi.solverResolutionTime = 9999999999999999;
 
-		for(size_t i = 0; i < solverOuts.size(); ++i)
-		{
-			myReport << std::string(204, '-') << std::endl;
-			time_t totalTime = solverOuts[i].systemBuildTime + solverOuts[i].matrixBuildTime + solverOuts[i].solverResolutionTime;
-			myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << solverOuts[i].resolution << "|" << setw(5) << solverOuts[i].gaussianNoise <<  "|" << setw(9) << solverOuts[i].normalAlgorithm << "|" << setw(6) << solverOuts[i].smoothingAlgorithm << "|" << setw(29) << solverOuts[i].solverMethod << "|" << setw(10) << solverOuts[i].isMultigrid << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << solverOuts[i].numberThreads << "|" << setw(7) << RESULT_STRING[solverOuts[i].isSolved] << "|" << setw(8) << solverOuts[i].systemBuildTime << "|" << setw(8) << solverOuts[i].matrixBuildTime << "|" << setw(13) << solverOuts[i].solverResolutionTime << "|" << setw(13) << totalTime <<  "|" << setw(10) <<  solverOuts[i].iterations << "|" << setw(12) << solverOuts[i].error << "|" << std::endl;
-			excel << Relative_In_Path_Name_ << ", " << solverOuts[i].resolution << ", " << solverOuts[i].gaussianNoise <<  ", " << solverOuts[i].normalAlgorithm << ", " << solverOuts[i].smoothingAlgorithm << ", " << solverOuts[i].solverMethod << ", " << solverOuts[i].isMultigrid << ", " << totalTime << ", " << solverOuts[i].multigridIterations << ", " << solverOuts[i].numberThreads << ", " << RESULT_STRING[solverOuts[i].isSolved] << ", " << solverOuts[i].systemBuildTime << ", " << solverOuts[i].matrixBuildTime << ", " << solverOuts[i].solverResolutionTime << ", " << solverOuts[i].iterations << ", " << solverOuts[i].error << std::endl;
+        for(size_t i = 0; i < solverOuts.size(); ++i)
+        {
+            myReport << std::string(204, '-') << std::endl;
+            time_t totalTime = solverOuts[i].systemBuildTime + solverOuts[i].matrixBuildTime + solverOuts[i].solverResolutionTime;
+            myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << solverOuts[i].resolution << "|" << setw(9) << solverOuts[i].normalAlgorithm << "|" << setw(6) << solverOuts[i].smoothingAlgorithm << "|" << setw(29) << solverOuts[i].solverMethod << "|" << setw(10) << solverOuts[i].isMultigrid << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << solverOuts[i].numberThreads << "|" << setw(7) << RESULT_STRING[solverOuts[i].isSolved] << "|" << setw(8) << solverOuts[i].systemBuildTime << "|" << setw(8) << solverOuts[i].matrixBuildTime << "|" << setw(13) << solverOuts[i].solverResolutionTime << "|" << setw(13) << totalTime <<  "|" << setw(10) <<  solverOuts[i].iterations << "|" << setw(12) << solverOuts[i].error << "|" << std::endl;
+            
+            excel << Relative_In_Path_Name_ << ", " << solverOuts[i].resolution << ", " << solverOuts[i].normalAlgorithm << ", " << solverOuts[i].smoothingAlgorithm << ", " << solverOuts[i].solverMethod << ", " << solverOuts[i].isMultigrid << ", " << solverOuts[i].multigridIterations << ", " << solverOuts[i].numberThreads << ", " << RESULT_STRING[solverOuts[i].isSolved] << ", " << solverOuts[i].systemBuildTime << ", " << solverOuts[i].matrixBuildTime << ", " << solverOuts[i].solverResolutionTime << ", " << totalTime << ", " << solverOuts[i].iterations << ", " << solverOuts[i].error << std::endl;
 
-			if(totalTime < bestCombi.systemBuildTime + bestCombi.matrixBuildTime + bestCombi.solverResolutionTime && solverOuts[i].isSolved == true)
-				bestCombi = solverOuts[i];
-		}
+            if(totalTime < bestCombi.systemBuildTime + bestCombi.matrixBuildTime + bestCombi.solverResolutionTime && solverOuts[i].isSolved == true)
+                bestCombi = solverOuts[i];
+        }
 
 		myReport << std::string(204, '-') << std::endl << endl;
 		myReport << "Fastest Combination With Solution: " << endl;
@@ -603,7 +655,7 @@ void computeMultipleReconstruction(int &argc, char** argv)
 		excel.close();
 
 		// Compress and Remove subdirectory
-		std::string compressDirectoryCommand = "tar -zcvf " + directoryName + "/singleAnalysis.tgz " + directoryName + "/singleAnalysis";
+		std::string compressDirectoryCommand = "tar -zcvf " + directoryName + "/singleAnalysis_Biharmonic.tgz " + directoryName + "/singleAnalysis";
 		std::cout << compressDirectoryCommand << endl;
 		system(compressDirectoryCommand.c_str());
 		std::string removeDirectoryCommand = "rm -rf " + directoryName + "/singleAnalysis/";
@@ -611,7 +663,7 @@ void computeMultipleReconstruction(int &argc, char** argv)
 
 	// Initialize Viewer
 	//
-	glutInit(&argc, argv);
+	/*glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
 	glutInitWindowSize(1000, 1000);
 	glutInitWindowPosition(0, 0);
@@ -619,7 +671,195 @@ void computeMultipleReconstruction(int &argc, char** argv)
 	//glutFullScreen();
 
 	// Display Function
-	glutDisplayFunc(display);
+	glutDisplayFunc(display);*/
+}
+
+void computeMultipleReconstructionQuadtree(int &argc, char** argv)
+{
+	// Create & Manage Directory Hierarchy
+	//
+	std::vector<std::string> results;
+	std::vector<std::string> endResults;
+	boost::algorithm::split(results, Relative_In_Path_Name_, boost::is_any_of("/"));
+	boost::algorithm::split(endResults, results[results.size()-1], boost::is_any_of("."));
+
+	std::string directoryName = "../multipleAnalysis";
+	std::string directoryCommand = "mkdir -p " + directoryName;
+	system(directoryCommand.c_str());
+	
+	
+	directoryName = directoryName + "/multiple-analysis-" + endResults[0];
+	directoryCommand = "mkdir -p " + directoryName;
+	system(directoryCommand.c_str());
+	
+	std::vector<SolverData> solverOuts;
+
+    for(size_t normalAlgIt = Normal_Algorithm_; normalAlgIt < 2; ++normalAlgIt)
+    {
+        for(size_t solverAlgIt = Solver_Method_; solverAlgIt < 3; ++solverAlgIt)
+        {
+            for(float numberThreadsIt = Num_Threads_; numberThreadsIt >= 1; numberThreadsIt-=2)
+            {					
+                ScalarField field;
+                BiharmonicSolver solver;
+                Eigen::VectorXd guess;
+                Image *img;
+
+                int normalIt = normalAlgIt;
+                int solverIt = solverAlgIt;
+
+                if(Fixed_Normal_Algorithm)
+                    normalIt = Normal_Algorithm_;
+                if(Fixed_Solver_Method)
+                    solverIt = Solver_Method_;
+
+                SolverData s;
+
+                // Now Compute the Quadree Solution
+                //
+
+                Quadtree qtree;
+                s = qtree.compute(*mesh_.get(), QuadTree_Levels_, field, normalAlgIt, 0, solverAlgIt, numberThreadsIt, Full_Grid_Subdivision, Print_Logs_);
+                
+                s.resolution = pow(2,QuadTree_Levels_)+1;
+                s.gaussianNoise = Gaussian_Noise_;
+                s.normalAlgorithm = NORMAL_STRING[normalAlgIt];
+                s.smoothingAlgorithm = "1D";
+                s.solverMethod = SOLVER_STRING[solverAlgIt];
+                s.isMultigrid = "No";
+                s.multigridIterations = 0;
+                s.numberThreads = numberThreadsIt;
+                
+                // Create & Manage Directory Hierarchy
+                //
+                std::string singleSubDirCommand = "mkdir -p " + directoryName + "/singleAnalysis";
+                system(singleSubDirCommand.c_str());
+                std::string subDirName = directoryName + "/singleAnalysis/analysis_Quadtree-" + endResults[0] + s.normalAlgorithm + "-" + s.smoothingAlgorithm + "-" + s.solverMethod + "-" + "Multigrid-" + std::to_string(s.numberThreads) + "threads";
+                std::string subDirCommand = "mkdir -p " + subDirName;
+                system(subDirCommand.c_str());
+                Relative_Quadtree_Out_Path_Name_ = subDirName + "/quadtree-" + Relative_Out_Path_Name_;
+                std::string relative_Out_Path_Name = subDirName + "/" + Relative_Out_Path_Name_;
+
+                
+                img = field.toImage(1, 0.0f);
+                if(!img->savePNG(Relative_Quadtree_Out_Path_Name_))
+                {
+                    cout << "[ERROR] Could not save file!" << endl;
+                    delete img;
+                    return;
+                }
+                delete img;
+
+                Image qtreeImg;
+                qtreeImg.init(1024, 1024);
+                qtree.draw(qtreeImg);
+                std::string strQuadtree = subDirName + "/quadtree.png";
+                qtreeImg.savePNG(strQuadtree);
+
+
+                time_t totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
+        
+                // Save Text Reports
+                ofstream myReport;
+                std::string strReport = subDirName + "/report.txt";
+                myReport.open (strReport);
+                myReport << std::string(204, '-') << std::endl;
+                myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
+                myReport << std::string(204, '-') << std::endl;
+                totalTime = s.systemBuildTime + s.matrixBuildTime + s.solverResolutionTime;
+                myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << Field_Resolution_ << "|" << setw(9) << NORMAL_STRING[Normal_Algorithm_] << "|" << setw(6) << SMOOTHNESS_STRING[Smoothness_Algorithm_] << "|" << setw(29) << SOLVER_STRING[Solver_Method_] << "|" << setw(10) << RESULT_STRING[Multigrid_] << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << Num_Threads_ << "|" << setw(7) << RESULT_STRING[s.isSolved] << "|" << setw(8) << s.systemBuildTime << "|" << setw(8) <<s.matrixBuildTime << "|" << setw(13) <<s.solverResolutionTime << "|" << setw(13) << totalTime << "|" << setw(10) << s.iterations << "|" << setw(12) << s.error << "|" << std::endl;
+                myReport << std::string(204, '-') << std::endl;
+                myReport.close();
+                
+                ofstream Qexcel;
+                std::string strExcel = subDirName + "/Quadtree_report.csv";
+                Qexcel.open(strExcel);
+                Qexcel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << " ," << "Iterations" << ", " << "Error" << std::endl;
+                std::cout.precision(5);
+                Qexcel << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << totalTime << s.iterations << ", " << s.error << std::endl;
+                Qexcel.close();
+
+                std::cout.precision(5);
+                std::cout << "[RESULT] " << Relative_In_Path_Name_ << ", " << s.resolution << ", " << s.normalAlgorithm << ", " << s.smoothingAlgorithm << ", " << s.solverMethod << ", " << s.isMultigrid << ", " << s.multigridIterations << ", " << s.numberThreads << ", " << RESULT_STRING[s.isSolved] << ", " << s.systemBuildTime << ", " << s.matrixBuildTime << ", " << s.solverResolutionTime << ", " << s.iterations << ", " << s.error << std::endl;                
+                
+                std::cout << endl;
+
+                solverOuts.push_back(s);
+                
+                if(Fixed_Num_Threads)
+                    break;
+            } 
+
+            if(Fixed_Solver_Method)
+                break;
+        }
+        if(Fixed_Normal_Algorithm)
+            break;
+    }
+
+    // Save Text Reports
+    ofstream myReport;
+    std::string strReport = directoryName + "/Quadtree_report.txt";
+    myReport.open (strReport);
+
+    ofstream excel;
+    std::string strExcel = directoryName + "/Quadtree_report.csv";
+    excel.open(strExcel);
+
+    myReport << std::string(204, '-') << std::endl;
+    myReport << "|" << setw(25) << "Relative In Path Name" << "|" << setw(10) << "Resolution" << "|" << setw(9) << "Normal" << "|" << setw(6) << "Smooth" << "|" << setw(29) << "Solver Method" << "|" << setw(10) << "Multigrid?" << "|" << setw(16) << "Multi Iterations" << "|" << setw(7) << "Threads" << "|" << setw(7) << "Solved?" << "|" << setw(8) << "Sys Time" << "|" << setw(8) << "Mat Time" << "|" << setw(13) << "Solv Res Time" << "|" << setw(13) << "Total Time" << "|" << setw(10) << "Iterations" << "|" << setw(12) << "Error" << "|" << std::endl;
+
+    excel << "Relative In Path Name" << ", " << "Resolution" << ", " << "Normal" << ", " << "Smooth" << ", " << "Solver Method" << ", " << "Multigrid?" << ", " << "Multi Iterations" << ", " << "Threads" << ", " << "Is Solved?" << ", " << "Syst Time" << ", " << "Mat Time" << ", " << "Solver Res Time" << ", " << "Total Time" << ", " << "Iterations" << ", " << "Error" << std::endl;
+    std::cout.precision(5);
+
+    SolverData bestCombi;
+    bestCombi.solverResolutionTime = 9999999999999999;
+
+    for(size_t i = 0; i < solverOuts.size(); ++i)
+    {
+        myReport << std::string(204, '-') << std::endl;
+        time_t totalTime = solverOuts[i].systemBuildTime + solverOuts[i].matrixBuildTime + solverOuts[i].solverResolutionTime;
+        myReport << "|" << setw(25) << Relative_In_Path_Name_ << "|" << setw(10) << solverOuts[i].resolution << "|" << setw(9) << solverOuts[i].normalAlgorithm << "|" << setw(6) << solverOuts[i].smoothingAlgorithm << "|" << setw(29) << solverOuts[i].solverMethod << "|" << setw(10) << solverOuts[i].isMultigrid << "|" << setw(16) << Multigrid_Iterations_ << "|" << setw(7) << solverOuts[i].numberThreads << "|" << setw(7) << RESULT_STRING[solverOuts[i].isSolved] << "|" << setw(8) << solverOuts[i].systemBuildTime << "|" << setw(8) << solverOuts[i].matrixBuildTime << "|" << setw(13) << solverOuts[i].solverResolutionTime << "|" << setw(13) << totalTime <<  "|" << setw(10) <<  solverOuts[i].iterations << "|" << setw(12) << solverOuts[i].error << "|" << std::endl;
+        
+        excel << Relative_In_Path_Name_ << ", " << solverOuts[i].resolution << ", " << solverOuts[i].normalAlgorithm << ", " << solverOuts[i].smoothingAlgorithm << ", " << solverOuts[i].solverMethod << ", " << solverOuts[i].isMultigrid << ", " << solverOuts[i].multigridIterations << ", " << solverOuts[i].numberThreads << ", " << RESULT_STRING[solverOuts[i].isSolved] << ", " << solverOuts[i].systemBuildTime << ", " << solverOuts[i].matrixBuildTime << ", " << solverOuts[i].solverResolutionTime << ", " << totalTime << ", " << solverOuts[i].iterations << ", " << solverOuts[i].error << std::endl;
+
+        if(totalTime < bestCombi.systemBuildTime + bestCombi.matrixBuildTime + bestCombi.solverResolutionTime && solverOuts[i].isSolved == true)
+            bestCombi = solverOuts[i];
+    }
+
+    myReport << std::string(204, '-') << std::endl << endl;
+    myReport << "Fastest Combination With Solution: " << endl;
+    myReport << "\t"  << "- Normal Method:     " << bestCombi.normalAlgorithm << endl; 
+    myReport << "\t"  << "- Smoothness Method: " << bestCombi.smoothingAlgorithm << endl; 
+    myReport << "\t"  << "- Solver System:     " << bestCombi.solverMethod << endl; 
+    myReport << "\t"  << "- MultiGrid Needed?  " << bestCombi.isMultigrid << endl; 
+    /*if(bestCombi.isMultigrid == "Yes")
+        myReport << "\t"  << "- MultiGrid Iter:    " << bestCombi.isMultigrid << endl; */
+    myReport << "\t"  << "- Number Threads:    " << bestCombi.numberThreads << endl; 
+/*		time_t totalTime = bestCombi.systemBuildTime + bestCombi.matrixBuildTime + bestCombi.solverResolutionTime;
+    myReport << "\t"  << "- Total Time (ms.):  " << totalTime << endl << endl;*/
+
+    myReport.close();
+    excel.close();
+
+    // Compress and Remove subdirectory
+    std::string compressDirectoryCommand = "tar -zcvf " + directoryName + "/Quadtree_singleAnalysis.tgz " + directoryName + "/singleAnalysis";
+    std::cout << compressDirectoryCommand << endl;
+    system(compressDirectoryCommand.c_str());
+    std::string removeDirectoryCommand = "rm -rf " + directoryName + "/singleAnalysis/";
+    system(removeDirectoryCommand.c_str());
+
+	// Initialize Viewer
+	//
+	/*glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+	glutInitWindowSize(1000, 1000);
+	glutInitWindowPosition(0, 0);
+	glutCreateWindow("Point Cloud Viewer");
+	//glutFullScreen();
+
+	// Display Function
+	glutDisplayFunc(display);*/
 }
 
 
@@ -644,7 +884,7 @@ int main(int argc, char** argv) {
 		bool res = false;
 		if (type.compare("txt") == 0) 
 		{
-			res = data_representation::ReadFromTXT(file, mesh_.get(), Gaussian_Noise_);
+			res = data_representation::ReadFromTXT(file, mesh_.get(), Gaussian_Noise_, Sampling_Density);
 			Model_Generated_ = true;
 		}
 
@@ -675,7 +915,10 @@ int main(int argc, char** argv) {
 	}
 	else if(Model_Generated_ && Experimentation_Mode_)
 	{
-		computeMultipleReconstruction(argc, argv);
+        if(Which_Method_Execute_ == "Quadtree" || Which_Method_Execute_ == "Both")
+            computeMultipleReconstructionQuadtree(argc, argv);
+        if(Which_Method_Execute_ == "Biharmonic" || Which_Method_Execute_ == "Both")
+            computeMultipleReconstructionBiharmonic(argc, argv);
 	}
 
 	return 0;
